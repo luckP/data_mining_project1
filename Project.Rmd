@@ -1,0 +1,53 @@
+---
+title: "Project"
+author: "Lucas Parada, Ana Catarina Monteiro, Lucas de Paula"
+date: "11/16/2019"
+output: pdf_document
+---
+
+##Data Import
+```{r}
+setwd("/Users/lucparada/MEGA/FCUP/Ano_04/Semestre_1/DataMining/Project/")
+df = read.csv('data/PRSA_Data_Aotizhongxin_20130301-20170228.csv')
+
+```
+
+##Data Analisys
+```{r}
+library(ggplot2)
+head(df)
+summary(df)
+tail(df)
+
+dim(df)
+
+```
+
+###Missing Values
+```{r}
+library(na.tools)
+library(naniar)
+library(dplyr)
+library(tidyimpute)
+
+df %>% filter_any_na() %>% count()
+sum(is.na(df$RAIN))
+
+gg_miss_var(df %>% select(RAIN, TEMP, PRES, wd, WSPM, month), facet = month)
+df %>% select(RAIN, TEMP, PRES, wd, WSPM) %>% filter_any_na()
+
+df[is.na(df$TEMP), ]
+#ggplot(df, aes)
+  
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
