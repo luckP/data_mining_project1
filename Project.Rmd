@@ -7,7 +7,7 @@ output: pdf_document
 
 ##Data Import
 ```{r}
-setwd("/Users/lucparada/MEGA/FCUP/Ano_04/Semestre_1/DataMining/Project/")
+setwd("/Users/lucparada/MEGA/FCUP/Ano_04/Semestre_1/DataMining/Project/data_mining_project1")
 df = read.csv('data/PRSA_Data_Aotizhongxin_20130301-20170228.csv')
 
 ```
@@ -15,13 +15,30 @@ df = read.csv('data/PRSA_Data_Aotizhongxin_20130301-20170228.csv')
 ##Data Analisys
 ```{r}
 library(ggplot2)
-head(df)
+head(df, 20)
 summary(df)
-tail(df)
-
 dim(df)
-
 ```
+
+##Check Outliers
+Verificamos para cada uma das colunas se existem valores outliers
+Para isso plotamos os dados utilizando o boxplot
+....
+```{r}
+#df %>% group_by(month) %>% ggplot(aes(group = month, y = TEMP)) + geom_boxplot()
+#temp_out <- boxplot(TEMP~month+year , data=df)$out
+#temp_out <- boxplot(df$TEMP~month)$out
+
+#ed_exp1 <- df[c(10:21),c(2,6:7)]
+
+#df_new <- df[-which(df$TEMP %in% temp_out),]
+#boxplot(TEMP~month+year , data=df_new)
+
+#boxplot(df.NEW_TEMP$TEMP)
+#boxplot(df$TEMP)
+```
+
+
 
 ###Missing Values
 ```{r}
@@ -29,25 +46,33 @@ library(na.tools)
 library(naniar)
 library(dplyr)
 library(tidyimpute)
+library(zoo)
 
-df %>% filter_any_na() %>% count()
-sum(is.na(df$RAIN))
+#check missing values
+#df %>% select(RAIN, TEMP, PRES, wd, WSPM) %>% filter_any_na()
+gg_miss_var(df, facet = month)
 
-gg_miss_var(df %>% select(RAIN, TEMP, PRES, wd, WSPM, month), facet = month)
-df %>% select(RAIN, TEMP, PRES, wd, WSPM) %>% filter_any_na()
+#function interpolation
+interpolation_df <- function(df, col_names ){
+  for(col in col_names){
+    df[col] <- na.approx(df[col], rule=2)
+  }
+  return(df)
+}
 
-df[is.na(df$TEMP), ]
-#ggplot(df, aes)
-  
+head(df)
+col_names = c("PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+df <- interpolation_df(df, col_names)
+gg_miss_var(df, facet = month)
+
+#falta remover os missing values da coluna wd
+#sum(is.na(df$wd))
 ```
 
+###Calc a class variable
+```{r}
+df$aqi<-NA
+df[, "aqi"] <- apply(df[, 6:11], 1, max)
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+head(df)
 ```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
