@@ -1,26 +1,115 @@
 ---
-title: "Project"
+title: "Projeto Data Mining I"
 author: "Lucas Parada, Ana Catarina Monteiro, Lucas de Paula"
 date: "11/16/2019"
 output: pdf_document
 ---
 
-##Data Import
+
+# Data importation, clean-up and pre-processing
+<!-- 
+In this part of your work you should focus on importing the provided data into an appropriate R format so
+that your posterior analysis is made simpler. You should also check if it is necessary to carry out any data
+clean-up and/or pre-processing steps.
+-->
+## Importando os Dados
+Inicialmente importamos todos as bibliotecas que utilizaresmos neste trabalho
+Foi importado o dataset "PRSA_Data_Aotizhongxin_20130301-20170228"
+&nbsp;
+ - Foi utilizado o DataFrame do R para manipular os dados, pois este tipo de estrutura de dados possui um conjunto de funcionalidades e ferrantas que auxiliam neste processo
 ```{r}
-setwd("/Users/lucparada/MEGA/FCUP/Ano_04/Semestre_1/DataMining/Project/data_mining_project1")
+library(na.tools)
+library(naniar)
+library(dplyr)
+library(zoo)
+library(ggplot2)
+library(caret)
+library(tidyimpute)
 df = read.csv('data/PRSA_Data_Aotizhongxin_20130301-20170228.csv')
+```
+## Analisando os dados
+Utilizando a função "summary" da linguagem R foi feita uma análise dos dados.
+
+```{r}
+summary(df)
+```
+Começamos por verificar se existia algum dia em falta no dataframe e vimos que nao.
+Samendo que o dataset possui os valores referentes a 4 anos completos especificados por hora então sevem existir (4*365+1)*24 = 35064 rows
+
+```{r}
+  #samendo que o dataset possui os valores referentes a 4 anos completos especificados por hora então sevem existir (4*365+1)*24 = 35064 rows
+dim(df)
+```
+
+## Outliers
+Seguimos com a analise da existencia de outliers em variáveis numericas. Começando por ver fazer a análise por variavel como um todo, em seguida fizemos a análise por variavel tendo em conta a estação do ano e por último por variavel por mês.
+
+### Como um todo
+```{r}
+boxplot(x = df$CO)
+boxplot(x = df$PM2.5)
+boxplot(x = df$PM10)
+boxplot(x = df$SO2)
+boxplot(x = df$NO2)
+boxplot(x = df$CO)
+boxplot(x = df$O3)
+boxplot(x = df$TEMP)
+boxplot(x = df$PRES)
+boxplot(x = df$DEWP)
+boxplot(x = df$RAIN)
+boxplot(x = df$WSPM)
+
+plot(df$CO, pch=".", cex=2, main="Influential Obs by Cooks distance")  # plot cook's distance
+abline(h = 4*mean(df$CO, na.rm=T), col="red")  # add cutoff line
+#text(x=1:length(df$CO)+1, y=df$CO, labels=ifelse(df$CO>4*mean(df$CO, na.rm=T),names(df$CO),""), col="red")  # add labels
+```
+Como 
+
+### Por estação do ano
+```{r}
 
 ```
 
-##Data Analisys
+### Por mês
 ```{r}
-library(ggplot2)
+
+
+
+```
+
+
+
+
+Apartir da análise mencionada anteriormente foi identificada que as varáveis "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "wd", "WSPM" possuem missing values.
+
+
+
+Em seguida foi uma análise e foi verificado que as variáveis "TEMP", "PRES", "DEWP", "RAIN" esta a faltar no mesmo dia atravez do gráfico:
+```{r}
+
+#check missing values
+#df %>% select(RAIN, TEMP, PRES, wd, WSPM) %>% filter_any_na()
+gg_miss_var(df, facet = month)
+
+
+```
+
+
+
+
+
+
+
+
+
+## Data Analisys
+```{r}
 head(df, 20)
 summary(df)
 dim(df)
 ```
 
-##Check Outliers
+## Check Outliers
 Verificamos para cada uma das colunas se existem valores outliers
 Para isso plotamos os dados utilizando o boxplot
 ....
@@ -40,18 +129,8 @@ Para isso plotamos os dados utilizando o boxplot
 
 
 
-###Missing Values
+### Missing Values
 ```{r}
-library(na.tools)
-library(naniar)
-library(dplyr)
-library(tidyimpute)
-library(zoo)
-
-#check missing values
-#df %>% select(RAIN, TEMP, PRES, wd, WSPM) %>% filter_any_na()
-gg_miss_var(df, facet = month)
-
 #function interpolation
 interpolation_df <- function(df, col_names ){
   for(col in col_names){
@@ -69,10 +148,27 @@ gg_miss_var(df, facet = month)
 #sum(is.na(df$wd))
 ```
 
-###Calc a class variable
+### Calc a class variable
 ```{r}
 df$aqi<-NA
 df[, "aqi"] <- apply(df[, 6:11], 1, max)
 
 head(df)
 ```
+
+
+
+
+# Data exploratory analysis
+<!-- 
+This part involves summarising and visualising the data in forms that you think are useful. Try to think
+about interesting questions that could be interesting to check with the available data, and provide answers
+either using textual summaries or data visualisation.
+-->
+
+# Predictive modelling
+<!-- 
+You should define a predictive task that can help to predict the air pollution, through the AQI value or Air
+Pollution Level, given its feature values. After defining the task, you should use your available data to select
+and obtain a good model for this task. Justify your suggested model.
+-->
