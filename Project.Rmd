@@ -25,6 +25,8 @@ library(zoo)
 library(ggplot2)
 library(caret)
 library(tidyimpute)
+library("ggplot2")
+
 df = read.csv('data/PRSA_Data_Aotizhongxin_20130301-20170228.csv')
 ```
 ## Analisando os dados
@@ -46,32 +48,61 @@ Seguimos com a analise da existencia de outliers em variáveis numericas. Começ
 
 ### Como um todo
 ```{r}
-boxplot(x = df$CO)
-boxplot(x = df$PM2.5)
-boxplot(x = df$PM10)
-boxplot(x = df$SO2)
-boxplot(x = df$NO2)
-boxplot(x = df$CO)
-boxplot(x = df$O3)
-boxplot(x = df$TEMP)
-boxplot(x = df$PRES)
-boxplot(x = df$DEWP)
-boxplot(x = df$RAIN)
-boxplot(x = df$WSPM)
+col_list = c("CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
 
-plot(df$CO, pch=".", cex=2, main="Influential Obs by Cooks distance")  # plot cook's distance
-abline(h = 4*mean(df$CO, na.rm=T), col="red")  # add cutoff line
+df_ALL_boxplot <- df %>% select(col_list)
+df_ALL_boxplot <- scale(df_ALL_boxplot)
+
+boxplot(x = df_ALL_boxplot)
+
+#for(i in col_list){
+#  plot(df[i], pch=".", cex=2, main=i)  # plot cook's distance
+#  abline(h = 4*mean(c(df[i]), na.rm=T), col="red")  # add cutoff line
+#}
 #text(x=1:length(df$CO)+1, y=df$CO, labels=ifelse(df$CO>4*mean(df$CO, na.rm=T),names(df$CO),""), col="red")  # add labels
 ```
 Como 
 
 ### Por estação do ano
 ```{r}
+col_list = c("season","CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+df_seasons_boxplot <- df %>% mutate(season = 
+                                ifelse(month == 12 & day >= 21, 'winter', 
+                                ifelse(month == 1 | month == 2, 'winter', 
+                                ifelse(month == 3 & day < 20, 'winter', 
+                                       
+                                ifelse(month == 3 & day >= 20, 'spring', 
+                                ifelse(month == 4 | month == 5, 'spring', 
+                                ifelse(month == 6 & day < 21, 'spring', 
+                                       
+                                ifelse(month == 6 & day >= 21, 'summer', 
+                                ifelse(month == 7 | month == 8, 'summer', 
+                                ifelse(month == 9 & day < 21, 'summer', 
+                                       
+                                ifelse(month == 9 & day >= 21, 'autumn', 
+                                ifelse(month == 10 | month == 11, 'autumn', 
+                                ifelse(month == 12 & day < 21, 'autumn', 
+                                       
+                                       0))))))))))))) %>%
+                      select(col_list)
 
+for(s in df_seasons_boxplot$season %>% unique()){
+   df_seasons_boxplot %>% filter(season == s) %>% select(-season) %>% scale() %>% boxplot(main=s)
+}
 ```
 
 ### Por mês
 ```{r}
+col_list = c("month", "CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+
+
+df_month_boxplot <- df %>% select(col_list)
+month_names <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+for(m in df_month_boxplot$month %>% unique()){
+   df_month_boxplot %>% filter(month == m) %>% select(-month) %>% scale() %>% boxplot(main=month_names[m])
+}
+
+df_month_boxplot %>% group_by(month) %>% select(-month) %>% scale() %>% boxplot()
 
 
 
@@ -91,6 +122,10 @@ Em seguida foi uma análise e foi verificado que as variáveis "TEMP", "PRES", "
 #df %>% select(RAIN, TEMP, PRES, wd, WSPM) %>% filter_any_na()
 gg_miss_var(df, facet = month)
 
+#for(col_name in c('TEMP', 'PRES', 'DEWP', 'RAIN')){
+#  (df %>% mutate(test_col = ifelse(is_na(TEMP), 1, 0)))$test_col %>% plot(pch=".", cex=2, main=col_name)  # plot cook's distance
+#  abline(h = 4*mean(c(df[col_name]), na.rm=T), col="red")  # add cutoff line
+#}
 
 ```
 
