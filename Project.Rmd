@@ -17,22 +17,28 @@ Inicialmente importamos todos as bibliotecas que utilizaresmos neste trabalho
 Foi importado o dataset "PRSA_Data_Aotizhongxin_20130301-20170228"
 &nbsp;
  - Foi utilizado o DataFrame do R para manipular os dados, pois este tipo de estrutura de dados possui um conjunto de funcionalidades e ferrantas que auxiliam neste processo
-```{r}
-library(na.tools)
-library(naniar)
-library(dplyr)
-library(zoo)
-library(ggplot2)
-library(caret)
-library(tidyimpute)
-library("ggplot2")
+```{r someVar, echo=FALSE}
+suppressMessages(library(na.tools))
+suppressMessages(library(naniar))
+suppressMessages(library(dplyr))
+suppressMessages(library(zoo))
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(tidyimpute))
+suppressMessages(library("ggplot2"))
+suppressMessages(library(BBmisc))
+suppressMessages(library(caret))
+suppressMessages(library(mltools))
+suppressMessages(library(dataPreparation))
 
-df = read.csv('data/PRSA_Data_Aotizhongxin_20130301-20170228.csv')
+df <- read.csv('data/PRSA_Data_Aotizhongxin_20130301-20170228.csv')
+df  <- tbl_df(df )
+color_list <- c('#FF928B', '#FFAC81', '#FFC491', '#EFE8A2', '#CDEAC0')
 ```
 ## Analisando os dados
 Utilizando a função "summary" da linguagem R foi feita uma análise dos dados.
 
-```{r}
+```{r echo=FALSE}
 summary(df)
 ```
 Começamos por verificar se existia algum dia em falta no dataframe e vimos que nao.
@@ -43,6 +49,7 @@ Samendo que o dataset possui os valores referentes a 4 anos completos especifica
 dim(df)
 ```
 
+
 ## Outliers
 Seguimos com a analise da existencia de outliers em variáveis numericas. Começando por ver fazer a análise por variavel como um todo, em seguida fizemos a análise por variavel tendo em conta a estação do ano e por último por variavel por mês.
 
@@ -51,76 +58,202 @@ Seguimos com a analise da existencia de outliers em variáveis numericas. Começ
 col_list = c("CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
 
 df_ALL_boxplot <- df %>% select(col_list)
-df_ALL_boxplot <- scale(df_ALL_boxplot)
 
-boxplot(x = df_ALL_boxplot)
+# remove rows with missing values
+df_ALL_boxplot <- df_ALL_boxplot[ complete.cases(df_ALL_boxplot), ]
 
-#for(i in col_list){
-#  plot(df[i], pch=".", cex=2, main=i)  # plot cook's distance
-#  abline(h = 4*mean(c(df[i]), na.rm=T), col="red")  # add cutoff line
-#}
-#text(x=1:length(df$CO)+1, y=df$CO, labels=ifelse(df$CO>4*mean(df$CO, na.rm=T),names(df$CO),""), col="red")  # add labels
+preproc<-preProcess(df_ALL_boxplot, method=c("range"))
+df_ALL_boxplot <- predict(preproc, df_ALL_boxplot)
+
+boxplot(x = df_ALL_boxplot, col = color_list, cex.axis=0.7)
+
 ```
 Como 
 
 ### Por estação do ano
 ```{r}
-col_list = c("season","CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+season <- function(month, day){
+  print(month)
+   if(month == 12 & day >= 21)
+  	return('Winter')
+  if(month == 1 | month == 2)
+  	return('Winter')
+  if(month == 3 & day < 20)
+  	return('Winter')
+  if(month == 3 & day >= 20)
+  	return('Spring')
+  if(month == 4 | month == 5)
+  	return('Spring')
+  if(month == 6 & day < 21)
+  	return('Spring')
+  if(month == 6 & day >= 21)
+  	return('Summer')
+  if(month == 7 | month == 8)
+  	return('Summer')
+  if(month == 9 & day < 21)
+  	return('Summer')
+  if(month == 9 & day >= 21)
+	  return('Autumn')
+  if(month == 10 | month == 11)
+	  return('Autumn')
+  if(month == 12 & day < 2)
+	  return('Autumn')
+}
+
+col_list <- c("season","CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
 df_seasons_boxplot <- df %>% mutate(season = 
-                                ifelse(month == 12 & day >= 21, 'winter', 
-                                ifelse(month == 1 | month == 2, 'winter', 
-                                ifelse(month == 3 & day < 20, 'winter', 
-                                       
-                                ifelse(month == 3 & day >= 20, 'spring', 
-                                ifelse(month == 4 | month == 5, 'spring', 
-                                ifelse(month == 6 & day < 21, 'spring', 
-                                       
-                                ifelse(month == 6 & day >= 21, 'summer', 
-                                ifelse(month == 7 | month == 8, 'summer', 
-                                ifelse(month == 9 & day < 21, 'summer', 
-                                       
-                                ifelse(month == 9 & day >= 21, 'autumn', 
-                                ifelse(month == 10 | month == 11, 'autumn', 
-                                ifelse(month == 12 & day < 21, 'autumn', 
-                                       
-                                       0))))))))))))) %>%
-                      select(col_list)
+  ifelse(month == 12 & day >= 21, 'Winter', 
+  ifelse(month == 1 | month == 2, 'Winter', 
+  ifelse(month == 3 & day < 20, 'Winter', 
+         
+  ifelse(month == 3 & day >= 20, 'Spring', 
+  ifelse(month == 4 | month == 5, 'Spring', 
+  ifelse(month == 6 & day < 21, 'Spring', 
+         
+  ifelse(month == 6 & day >= 21, 'Summer', 
+  ifelse(month == 7 | month == 8, 'Summer', 
+  ifelse(month == 9 & day < 21, 'Summer', 
+         
+  ifelse(month == 9 & day >= 21, 'Autumn', 
+  ifelse(month == 10 | month == 11, 'Autumn', 
+  ifelse(month == 12 & day < 21, 'Autumn', 
+         0))))))))))))
+) %>% select(col_list)
+
+df_seasons_boxplot %>% group_by(season) %>% boxplot(col = color_list, cex.axis=0.7)
 
 for(s in df_seasons_boxplot$season %>% unique()){
-   df_seasons_boxplot %>% filter(season == s) %>% select(-season) %>% scale() %>% boxplot(main=s)
+  
+  df_aux <- df_seasons_boxplot %>% filter(season == s) %>% select(-season)
+  
+  preproc<-preProcess(df_aux, method=c("range"))
+  norm2 <- predict(preproc, df_aux)
+  
+  norm2 %>% boxplot(main=s, col = color_list, cex.axis=0.7)
+  print('')
+  
+   #df_seasons_boxplot %>% filter(season == s) %>% select(-season) %>% scale() %>% boxplot(main=s)
 }
+
+
 ```
 
 ### Por mês
 ```{r}
 col_list = c("month", "CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
-
-
 df_month_boxplot <- df %>% select(col_list)
+
 month_names <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
-for(m in df_month_boxplot$month %>% unique()){
-   df_month_boxplot %>% filter(month == m) %>% select(-month) %>% scale() %>% boxplot(main=month_names[m])
+
+for(m in df_month_boxplot$month %>% unique() %>% sort()){
+  df_aux <- df_month_boxplot %>% filter(month == m) %>% select(-month)
+  
+  preproc<-preProcess(df_aux, method=c("range"))
+  norm2 <- predict(preproc, df_aux)
+  
+  par(cxy = c(.5,.5))
+  
+  norm2 %>% boxplot(main=month_names[m],col = color_list, cex.axis=0.7)
+  print('\n')
+   #df_month_boxplot %>% filter(month == m) %>% select(-month) %>% scale() %>% boxplot(main=month_names[m])
 }
 
-df_month_boxplot %>% group_by(month) %>% select(-month) %>% scale() %>% boxplot()
+#df_month_boxplot %>% group_by(month) %>% select(-month) %>% scale() %>% boxplot()
+
+#df %>% group_by(month) %>% ggplot(aes(x = month, y = TEMP)) + geom_boxplot() + facet_wrap(~year)
+```
 
 
+--------------------------------------------------------------------------------------------------------------
+
+## Tratamento de outliers
+```{r}
+#identificar se é melhorretirar os outliers como um todo, por estação do ano ou por mês
+col_list = c("CO", "PM2.5", "PM10", "SO2", "NO2", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+df_2 <- df
+
+df_2 <- df_2 %>% group_by(month) %>% 
+      mutate(CO =    ifelse(CO >    4*mean(CO, na.rm = T), NA,  CO)) %>% 
+      mutate(PM2.5 = ifelse(PM2.5 > 4*mean(PM2.5, na.rm = T), NA,  PM2.5)) %>% 
+      mutate(PM10 =  ifelse(PM10 >  4*mean(PM10, na.rm = T), NA,  PM10)) %>% 
+      mutate(SO2 =   ifelse(SO2 >   4*mean(SO2, na.rm = T), NA,  SO2)) %>% 
+      mutate(NO2 =   ifelse(NO2 >   4*mean(NO2, na.rm = T), NA,  NO2)) %>% 
+      mutate(O3 =    ifelse(O3 >    4*mean(O3, na.rm = T), NA,  O3)) %>% 
+      mutate(TEMP =  ifelse(TEMP >  4*mean(TEMP, na.rm = T), NA,  TEMP)) %>% 
+      mutate(PRES =  ifelse(PRES >  4*mean(PRES, na.rm = T), NA,  PRES)) %>% 
+      mutate(DEWP =  ifelse(DEWP >  4*mean(DEWP, na.rm = T), NA,  DEWP)) %>% 
+      #mutate(RAIN =  ifelse(RAIN >  4*mean(RAIN, na.rm = T), NA,  RAIN)) %>% 
+      #mutate(WSPM =  ifelse(WSPM >  4*mean(WSPM, na.rm = T), NA,  WSPM))  %>%
+      ungroup()
+
+#df_2 %>% filter(!is.na(CO)) %>% ggplot(aes(c(1:nrow( filter(df_2, !is.na(CO)))*4), CO)) + #geom_point(size=.05) + 
+#  facet_wrap(~month )+ 
+  #facet_wrap( ~ month) + 
+#  labs(subtitle="CO", title="Jittered Points")
 
 ```
 
 
+## One
+
+
+
+--------------------------------------------------------------------------------------------------------------
 
 
 Apartir da análise mencionada anteriormente foi identificada que as varáveis "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "wd", "WSPM" possuem missing values.
 
-
-
 Em seguida foi uma análise e foi verificado que as variáveis "TEMP", "PRES", "DEWP", "RAIN" esta a faltar no mesmo dia atravez do gráfico:
+
+Como a variável DEWP possui muitos missings values fizemos um estudo relacionando a varável DEWP e as outras variáveis climaticas para assim tentarmos identificar alguma relação entre elas. Concluimos que existe uma relação direta com a TEMP e uma relação inversa com A variável PRES.
+
 ```{r}
 
 #check missing values
 #df %>% select(RAIN, TEMP, PRES, wd, WSPM) %>% filter_any_na()
-gg_miss_var(df, facet = month)
+gg_miss_var(df_2)
+
+atm = c("TEMP", "PRES", "DEWP", "RAIN")
+# TEMP
+theme_set(theme_bw())  # pre-set the bw theme.
+ggplot(df_2, aes(TEMP, DEWP)) + geom_jitter(width = .5, size=.1) +
+  labs(
+    title="TEMP",
+       subtitle="Relação entre TEMP e DEWP", 
+       x="DEWP",
+       y="TEMP")+ 
+  geom_count() + 
+  geom_smooth(method="lm", se=F)
+
+# PRES
+ggplot(df_2, aes(PRES, DEWP)) + geom_jitter(width = .5, size=.1) +
+  labs(
+      title="PRES",
+       subtitle="Relação entre PRES e DEWP", 
+       x="PRES",
+       y="DEWP")+ 
+  geom_count() + 
+  geom_smooth(method="lm", se=F)
+
+# DEWP
+ggplot(df_2, aes(WSPM, DEWP)) + geom_jitter(width = .5, size=.1) +
+  labs(
+       title="Jittered Points",
+       subtitle="Relação entre WSPM e DEWP", 
+       x="WSPM",
+       y="DEWP")+ 
+  geom_count() + 
+  geom_smooth(method="lm", se=F)
+
+# RAIN
+ggplot(df_2, aes(RAIN, DEWP)) + geom_jitter(width = .5, size=.1) +
+  labs(
+       title="RAIN",
+      subtitle="Relação entre RAIN e DEWP", 
+       x="RAIN",
+       y="DEWP")+ 
+  geom_count() + 
+  geom_smooth(method="lm", se=F)
 
 #for(col_name in c('TEMP', 'PRES', 'DEWP', 'RAIN')){
 #  (df %>% mutate(test_col = ifelse(is_na(TEMP), 1, 0)))$test_col %>% plot(pch=".", cex=2, main=col_name)  # plot cook's distance
@@ -130,65 +263,153 @@ gg_miss_var(df, facet = month)
 ```
 
 
-
-
-
-
-
-
-
-## Data Analisys
-```{r}
-head(df, 20)
-summary(df)
-dim(df)
-```
-
-## Check Outliers
-Verificamos para cada uma das colunas se existem valores outliers
-Para isso plotamos os dados utilizando o boxplot
-....
-```{r}
-#df %>% group_by(month) %>% ggplot(aes(group = month, y = TEMP)) + geom_boxplot()
-#temp_out <- boxplot(TEMP~month+year , data=df)$out
-#temp_out <- boxplot(df$TEMP~month)$out
-
-#ed_exp1 <- df[c(10:21),c(2,6:7)]
-
-#df_new <- df[-which(df$TEMP %in% temp_out),]
-#boxplot(TEMP~month+year , data=df_new)
-
-#boxplot(df.NEW_TEMP$TEMP)
-#boxplot(df$TEMP)
-```
-
-
-
 ### Missing Values
 ```{r}
-#function interpolation
-interpolation_df <- function(df, col_names ){
-  for(col in col_names){
-    df[col] <- na.approx(df[col], rule=2)
-  }
-  return(df)
+interpolation_df <- function(d, col_names ){
+  for(col in col_names)
+    d[col] <- na.approx(d[col], rule=2)
+  return(d)
 }
 
-head(df)
-col_names = c("PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
-df <- interpolation_df(df, col_names)
-gg_miss_var(df, facet = month)
+col_names = c("PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "WSPM")
+#df_2 <- interpolation_df(df_2, col_names)
 
-#falta remover os missing values da coluna wd
-#sum(is.na(df$wd))
+df_2$PM2.5 <- na.approx(df_2$PM2.5, rule=2)
+df_2$PM10 <- na.approx(df_2$PM10, rule=2)
+df_2$SO2 <- na.approx(df_2$SO2, rule=2)
+df_2$NO2 <- na.approx(df_2$NO2, rule=2)
+df_2$CO <- na.approx(df_2$CO, rule=2)
+df_2$O3 <- na.approx(df_2$O3, rule=2)
+df_2$TEMP <- na.approx(df_2$TEMP, rule=2)
+df_2$PRES <- na.approx(df_2$PRES, rule=2)
+df_2$DEWP <- na.approx(df_2$DEWP, rule=2)
+df_2$WSPM <- na.approx(df_2$WSPM, rule=2)
+
+#gg_miss_var(df_2)
+
+#RAIN
+#df_2$RAIN[which(is.na(df_2$RAIN))] <- mode(df_2$RAIN)
+df_2 <- df_2 %>% mutate(RAIN = ifelse(is.na(RAIN), 0, RAIN))
+#WD
+df_2 <- transform(df_2, wd = na.locf(wd))
+
+#WSPM
+#Precisamo verificar como tratar desta variavel(relação entre temperatura e )
+
+df_2 %>% any_na()
 ```
 
-### Calc a class variable
-```{r}
-df$aqi<-NA
-df[, "aqi"] <- apply(df[, 6:11], 1, max)
 
-head(df)
+## Calcular as unidades de medida apropriadas
+```{r}
+  #massa atomica de atomos utilizados
+  o <- 15.999
+  n <- 14.007
+  c <- 12.011
+  s <- 32.06
+
+  #calculando o volume a partir da pressao e da temperatura
+  volum_func <- function(t, p){
+    return(22.41 * ((t+273.15)/273.15) * 1013/p)
+  }
+
+  # conversão de ug/m^3 para ppb
+  df_2 <- df_2 %>% mutate( CO  = CO  * volum_func(TEMP, PRES) / (c+o) )
+  df_2 <- df_2 %>% mutate( SO2 = SO2 * volum_func(TEMP, PRES) / (s+o*2) )
+  df_2 <- df_2 %>% mutate( NO2 = NO2 * volum_func(TEMP, PRES) / (n+o*2) )
+  df_2 <- df_2 %>% mutate( O3  = O3  * volum_func(TEMP, PRES) / (o*3) )
+  
+  # conversão de ppb para ppm
+  df_2 <- df_2 %>% mutate( CO  = CO / 1000 )
+  
+```
+
+## calcular a estação do ano
+```{r}
+
+# Selecionamos uma sequencia logica para a estação do ano, criando uma escala de de 0 a 3, sendo 0 a mais quente a 3 a mais fria
+
+df_2 <- df_2 %>% mutate(season = 
+  ifelse(month == 12 & day >= 21, 1, #outono
+  ifelse(month == 1 | month == 2, 1, #outono 
+  ifelse(month == 3 & day < 20, 1, #outono
+         
+  ifelse(month == 3 & day >= 20, 0.33, #primavera
+  ifelse(month == 4 | month == 5, 0.33, #primavera 
+  ifelse(month == 6 & day < 21, 0.33,  #primavera
+         
+  ifelse(month == 6 & day >= 21, 0,  #verao
+  ifelse(month == 7 | month == 8, 0, #verao
+  ifelse(month == 9 & day < 21, 0, #verao
+         
+  ifelse(month == 9 & day >= 21, 0.66, #inverno
+  ifelse(month == 10 | month == 11, 0.66, #inverno
+  ifelse(month == 12 & day < 21, 0.66, #inverno
+         0)))))))))))))
+
+
+```
+
+
+## One Hot Encode da variavel wd
+```{r}
+dmy  <- dummyVars(" ~wd", data = df_2)
+trsf <- data.frame(predict(dmy, newdata = df_2))
+
+df_2 <- cbind(df_2, trsf)
+```
+
+## Calcular AQI para cada variavel
+```{r}
+aqi_table <- read.csv("aqi_table.csv", header = T)
+  calc_aqi <- function(c, c_h, c_l){
+    ii = 1
+    i_h <- aqi_table$AQI_NUM_high
+    i_l <- aqi_table$AQI_NUM_low
+    
+    for(i in c(1:7)){
+      if(c_h[i]>=c)
+        ii = i
+        break;
+    }
+    return( ((i_h[ii] - i_l[ii])/(c_h[ii] - c_l[ii])) * (c - c_l[ii]) + i_l[ii])
+  }
+
+  df_2 <- df_2 %>% mutate( CO_AQI    =  calc_aqi(CO,aqi_table$CO_high, aqi_table$CO_low) )
+  df_2 <- df_2 %>% mutate( PM2.5_AQI =  calc_aqi(PM2.5, aqi_table$PM2.5_high, aqi_table$PM2.5_low) )
+  df_2 <- df_2 %>% mutate( PM10_AQI  =  calc_aqi(PM10, aqi_table$PM10_high, aqi_table$PM10_low) )
+  df_2 <- df_2 %>% mutate( SO2_AQI   =  calc_aqi(SO2,aqi_table$SO2_high, aqi_table$SO2_low) )
+  df_2 <- df_2 %>% mutate( NO2_AQI   =  calc_aqi(NO2,aqi_table$NO2_high, aqi_table$NO2_low) )
+  df_2 <- df_2 %>% mutate( O3_AQI    =  calc_aqi(O3,aqi_table$O3_high, aqi_table$O3_low) )
+
+```
+
+
+## Calcular a media diaria das variaveis SO2,  NO2, PM10, PM2.5
+```{r}
+df_2 <- df_2 %>% group_by(year, month, day) %>% 
+      mutate(SO2_AQI_mean =  mean(SO2_AQI, na.rm = T)) %>% 
+      mutate(NO2_AQI_mean =  mean(NO2_AQI, na.rm = T)) %>% 
+      mutate(PM10_AQI_mean = mean(PM10_AQI, na.rm = T)) %>%
+      mutate(PM2_AQI.5_mean = mean(PM2.5_AQI, na.rm = T)) %>%
+      ungroup()
+df_2
+```
+
+
+### Calc a class variable AQI
+```{r}
+df_2[, "AQI"] <- apply( df_2[c("PM2.5_AQI", "PM10_AQI", "SO2_AQI", "NO2_AQI", "CO_AQI", "O3_AQI")], 1, max )
+
+df_2 <- df_2 %>% mutate(AQI_cat = ifelse(AQI <= 50, 0, 
+                                         ifelse(AQI <= 100, 1,
+                                                ifelse(AQI <= 150, 2, 
+                                                       ifelse(AQI <= 200, 3, 
+                                                              ifelse(AQI <= 300, 4, 5 ))))))
+
+df_2 %>% ggplot(aes(c(1:nrow( df_2 )), AQI)) + 
+  geom_point(size=.05) + 
+  labs(subtitle="AQI", title="Jittered Points")
 ```
 
 
@@ -207,3 +428,58 @@ You should define a predictive task that can help to predict the air pollution, 
 Pollution Level, given its feature values. After defining the task, you should use your available data to select
 and obtain a good model for this task. Justify your suggested model.
 -->
+
+## installs and imports 
+```{r}
+#install.packages("tensorflow")
+#install.packages("keras")
+#install.packages("tfdatasets")
+
+suppressMessages(library(tensorflow))
+suppressMessages(library(keras))
+suppressMessages(library(tfdatasets))
+```
+
+## Normalizar os dados
+```{r}
+df_norm <- df_2 %>% select(c("TEMP","PRES","DEWP","RAIN","WSPM","wd.E","wd.ENE","wd.ESE","wd.N","wd.NE","wd.NNE","wd.NNW","wd.NW","wd.S","wd.SE","wd.SSE","wd.SSW","wd.SW","wd.W","wd.WNW","wd.WSW","CO_AQI","PM2.5_AQI","PM10_AQI","SO2_AQI","NO2_AQI","O3_AQI","AQI_cat","season"))
+
+preproc <- preProcess(df_norm, method=c("range"))
+df_norm <- predict(preproc, df_norm)
+#sapply(df_2, class)
+```
+
+
+#Separar o dataset in training e test
+```{r}
+df_norm_train <- sample(1:nrow(df_norm), 0.8 * nrow(df_norm))
+df_norm_test <- setdiff(1:nrow(df_norm), df_norm_train)
+
+x_df_norm_train <- df_norm[df_norm_train, -28]
+y_df_norm_train <- df_norm[df_norm_train, "AQI_cat"]
+
+x_df_norm_test <- df_norm[df_norm_test, -28]
+y_df_norm_test <- df_norm[df_norm_test, "AQI_cat"]
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
