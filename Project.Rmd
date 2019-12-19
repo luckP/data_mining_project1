@@ -160,7 +160,7 @@ for(m in df_month_boxplot$month %>% unique() %>% sort()){
   par(cxy = c(.5,.5))
   
   norm2 %>% boxplot(main=month_names[m],col = color_list, cex.axis=0.7)
-  print('\n')
+  print('')
    #df_month_boxplot %>% filter(month == m) %>% select(-month) %>% scale() %>% boxplot(main=month_names[m])
 }
 
@@ -178,51 +178,61 @@ for(m in df_month_boxplot$month %>% unique() %>% sort()){
 
 # 
 func_quart <- function(val){
+  print(val)
+  if(is.na(val) )
+    return(TRUE)
+  
   qr1 <- as.numeric(summary(val)['1rd Qu.'])
   qr3 <- as.numeric(summary(val)['3rd Qu.'])
+  
   iqr <- 1.5 * (qr3 - qr1)
   
-  if(is.na(val) )
-    return(T)
+  if( val>iqr) 
+    return(TRUE) 
   
-  if( val>( qr3 + iqr ) ) 
-    return(T) 
+  if( val<-iqr)
+     return(TRUE)
   
-  if( val<(qr1 - iqr) )
-     return(T)
-  
-  return( F )
+  return( FALSE )
 }
 
 df_preproc <- df
+
+
+df_preproc <- df_preproc %>% mutate(artur = mean(TEMP,  na.rm = T))
+
+
+df_preproc <- df_preproc %>% mutate(TEMP_dif = NA)
+#for( i in c(2: dim(df_preproc)[1]) ){
+#  df_preproc$TEMP_dif[i] <- abs(df_preproc$TEMP[i] - df_preproc$TEMP[i-1])
+#}
+
+#df_preproc$TEMP_dif[1] <- df_preproc$TEMP_dif[2]
+
+#df_preproc <- df_preproc %>% filter(TEMP_dif>7) %>% mutate(TEMP = NA) 
+
+#df_preproc$TEMP_dif %>% sort() %>% rev() %>% round() %>% table()
 df_preproc <- df_preproc %>% group_by(year, month) %>% 
-      mutate(CO =    ifelse(CO >    4*mean(CO, na.rm = T),   NA,  CO)) %>% 
-      mutate(PM2.5 = ifelse(PM2.5 > 4*mean(PM2.5, na.rm = T),NA,  PM2.5)) %>% 
-      mutate(PM10 =  ifelse(PM10 >  4*mean(PM10, na.rm = T), NA,  PM10)) %>% 
-      mutate(SO2 =   ifelse(SO2 >   4*mean(SO2, na.rm = T),  NA,  SO2)) %>% 
-      mutate(NO2 =   ifelse(NO2 >   4*mean(NO2, na.rm = T),  NA,  NO2)) %>% 
-      mutate(O3 =    ifelse(O3 >    4*mean(O3, na.rm = T),   NA,  O3)) %>% 
-      mutate(TEMP =  ifelse(TEMP >  4*mean(TEMP, na.rm = T), NA,  TEMP)) %>% 
-      mutate(PRES =  ifelse(PRES >  4*mean(PRES, na.rm = T), NA,  PRES)) %>% 
-      mutate(DEWP =  ifelse(abs(DEWP) >  4*abs(mean(PRES, na.rm = T)), NA,  DEWP)) %>% 
-      #mutate(DEWP =  ifelse(DEWP > func_quart(DEWP),  NA,  DEWP)) %>% 
-      #mutate(RAIN =  ifelse(RAIN >  4*mean(RAIN, na.rm = T), NA,  RAIN)) %>% 
-      #mutate(WSPM =  ifelse(WSPM >  4*mean(WSPM, na.rm = T), NA,  WSPM))  %>%
-      ungroup()
-
-df_preproc %>% ggplot(aes(c(1:nrow( df_preproc )), TEMP)) + 
-  geom_point(size=.05)
-
-df %>% ggplot(aes(c(1:nrow( df_preproc )), TEMP)) + 
-  geom_point(size=.05)
-
-
+  mutate(CO =    ifelse(CO >    4*mean(CO, na.rm = T),   NA,  CO)) %>% 
+  mutate(PM2.5 = ifelse(PM2.5 > 4*mean(PM2.5, na.rm = T),NA,  PM2.5)) %>% 
+  mutate(PM10 =  ifelse(PM10 >  4*mean(PM10, na.rm = T), NA,  PM10)) %>% 
+  mutate(SO2 =   ifelse(SO2 >   4*mean(SO2, na.rm = T),  NA,  SO2)) %>% 
+  mutate(NO2 =   ifelse(NO2 >   4*mean(NO2, na.rm = T),  NA,  NO2)) %>% 
+  mutate(O3 =    ifelse(O3 >    4*mean(O3, na.rm = T),   NA,  O3)) %>% 
+  #mutate(TEMP =  ifelse(TEMP >  4*mean(TEMP, na.rm = T), NA,  TEMP)) %>% 
+  mutate(TEMP =  ifelse(func_quart(TEMP) == TRUE, NA,  TEMP)) %>% 
+  mutate(PRES =  ifelse(PRES >  4*mean(PRES, na.rm = T), NA,  PRES)) %>% 
+  mutate(DEWP =  ifelse(abs(DEWP) >  4*abs(mean(PRES, na.rm = T)), NA,  DEWP)) %>% 
+  #mutate(DEWP =  ifelse(DEWP > func_quart(DEWP),  NA,  DEWP)) %>% 
+  #mutate(RAIN =  ifelse(RAIN >  4*mean(RAIN, na.rm = T), NA,  RAIN)) %>% 
+  #mutate(WSPM =  ifelse(WSPM >  4*mean(WSPM, na.rm = T), NA,  WSPM))  %>%
+  ungroup()
 
   #facet_wrap(~season ) + 
-#df_preproc %>% filter(!is.na(CO)) %>% ggplot(aes(c(1:nrow( filter(df_preproc, !is.na(CO)))*4), CO)) + #geom_point(size=.05) + 
-#  facet_wrap(~month )+ 
-  #facet_wrap( ~ month) + 
-#  labs(subtitle="CO", title="Jittered Points")
+df_preproc %>% filter(!is.na(CO)) %>% ggplot(aes(c(1:nrow( filter(df_preproc, !is.na(CO)))*4), CO)) + geom_point(size=.05) + 
+  facet_wrap(~month )+ 
+  facet_wrap( ~ month) + 
+  labs(subtitle="CO", title="Jittered Points")
 
 ```
 
@@ -307,7 +317,6 @@ df_preproc$TEMP <- na.approx(df_preproc$TEMP, rule=2)
 df_preproc$PRES <- na.approx(df_preproc$PRES, rule=2)
 df_preproc$DEWP <- na.approx(df_preproc$DEWP, rule=2)
 df_preproc$WSPM <- na.approx(df_preproc$WSPM, rule=2)
-
 
 #RAIN
 #df_preproc$RAIN[which(is.na(df_preproc$RAIN))] <- mode(df_preproc$RAIN)
@@ -464,21 +473,18 @@ aqi_table <- read.csv("aqi_table.csv", header = T)
 df_preproc_sample[, "AQI"] <- apply( df_preproc_sample[c("PM10_AQI", "SO2_AQI", "NO2_AQI", "CO_AQI", "O3_AQI", "PM2.5")], 1,max)
 
 df_preproc_sample <- df_preproc_sample %>% mutate(AQI_cat = 
-                                  ifelse(AQI <= 50, 0, 
-                                         ifelse(AQI <= 100, 1,
-                                                ifelse(AQI <= 150, 2, 
-                                                       ifelse(AQI <= 200, 3, 
-                                                              ifelse(AQI <= 300, 4, 5 ))))))
-
+                                          ifelse(AQI <= 50, 0, 
+                                            ifelse(AQI <= 100, 1,
+                                              ifelse(AQI <= 150, 2, 
+                                                ifelse(AQI <= 200, 3, 
+                                                  ifelse(AQI <= 300, 4, 5 ))))))
 
 df_preproc_sample <- df_preproc_sample %>% mutate(AQI_poll = 
                                   ifelse(CO_AQI  ==  AQI,  'CO', 
-                                  ifelse(SO2_AQI  == AQI, 'SO2',
-                                  ifelse(NO2_AQI == AQI, 'NO2', 
-                                  ifelse(O3_AQI == AQI, 'O3', 
-                                  ifelse(PM10_AQI == AQI, 'PM10', 'PM2.5' ))))))
-
-
+                                    ifelse(SO2_AQI  == AQI, 'SO2',
+                                      ifelse(NO2_AQI == AQI, 'NO2', 
+                                        ifelse(O3_AQI == AQI, 'O3', 
+                                          ifelse(PM10_AQI == AQI, 'PM10', 'PM2.5' ))))))
 
 df_preproc_sample %>% ggplot(aes(c(1:nrow( df_preproc_sample )), AQI)) + 
   geom_point(size=.05) + 
@@ -584,6 +590,20 @@ df_preproc_sample %>%
 
 ## Relação AQI e PM10
 ```{r}
+ggplot(df, aes(c(1: dim(df)[1]), PM2.5)) + 
+  geom_jitter(alpha=.3, size=.05) +
+  labs(
+       title="PM10",
+       subtitle="Relação entre PM10 e AQI", 
+       x="PM10",
+       y="AQI")
+
+
+
+
+
+
+
 g <- ggplot(df_preproc_sample, aes(PM10, AQI)) + 
   geom_jitter(alpha=.3, size=.5) +
   labs(
@@ -664,10 +684,10 @@ ggplot(df_preproc_sample, aes(WSPM, AQI)) +
 
 
 df_preproc_sample %>% 
-  group_by(month) %>% 
-    mutate(TEMP_mean = mean(TEMP)) %>% 
-      ungroup() %>%
-        ggplot(aes(TEMP_mean, AQI)) + 
+  #group_by(month) %>% 
+    #mutate(TEMP_mean = mean(TEMP)) %>% 
+      #ungroup() %>%
+        ggplot(aes(WSPM, AQI)) + 
           geom_jitter(alpha=.3, size=.5) +
           labs(
                title="TEMP",
@@ -701,11 +721,21 @@ suppressMessages(library(tfdatasets))
 
 ## Normalizar os dados
 ```{r}
-df_norm <- df_preproc_sample %>% select(c("TEMP","PRES","DEWP","RAIN","WSPM","wd.E","wd.ENE","wd.ESE","wd.N","wd.NE","wd.NNE","wd.NNW","wd.NW","wd.S","wd.SE","wd.SSE","wd.SSW","wd.SW","wd.W","wd.WNW","wd.WSW","CO_AQI","PM2.5_AQI","PM10_AQI","SO2_AQI","NO2_AQI","O3_AQI", "AQI", "AQI_cat","season"))
+df_norm <- df_preproc_sample %>% select(c("TEMP","PRES","DEWP","RAIN","WSPM","wd.E","wd.ENE","wd.ESE","wd.N","wd.NE","wd.NNE","wd.NNW","wd.NW","wd.S","wd.SE","wd.SSE","wd.SSW","wd.SW","wd.W","wd.WNW","wd.WSW","CO_AQI","PM2.5_AQI","PM10_AQI","SO2_AQI","NO2_AQI","O3_AQI", "AQI","season"))
+
 
 preproc <- preProcess(df_norm, method=c("range"))
 df_norm <- predict(preproc, df_norm)
 #df_norm <- df_norm %>% mutate(AQI_cat = as.factor(AQI_cat))
+
+df_norm <- df_norm*100
+df_norm <- df_norm %>% round()
+df_norm <- df_norm/100
+
+
+
+
+df_norm['AQI_cat'] <- df_preproc_sample$AQI_cat
 
 df_norm <- df_norm %>% mutate(AQI_cat_prev1 = NA)
 
@@ -714,6 +744,8 @@ for(i in c(2: dim(df_norm)) ){
 }
 df_norm$AQI_cat_prev1[1] <- df_norm$AQI_cat[1]
 
+
+head(df_norm)
 #sapply(df_preproc, class)
 ```
 
@@ -774,7 +806,7 @@ nn=neuralnet(AQI~TEMP + PRES + DEWP + RAIN + WSPM + wd.E + wd.ENE + wd.ESE + wd.
 plot(nn)
 
 Predict=compute(nn,test)
-Predict$net.result
+#Predict$net.result
 
 #error <- data.frame(error = (abs(test$AQI - Predict$net.result)))
 #error
@@ -815,7 +847,8 @@ train <- df_norm[train_ind, ]
 test  <- df_norm[-train_ind, ]
 
 tree_aqi <- tree(AQI_cat~ TEMP + PRES + DEWP + RAIN + WSPM + wd.E + wd.ENE + wd.ESE + wd.N + wd.NE + wd.NNE + wd.NNW + wd.NW + wd.S + wd.SE + wd.SSE + wd.SSW + wd.SW + wd.W + wd.WNW + wd.WSW + season + AQI_cat_prev1,
-                data=train)
+                data=train, split = "gini", control = tree.control(nobs=1500, mincut = 2, minsize=4, mindev = 0.00))
+
 summary(tree_aqi)
 
 plot(tree_aqi)
@@ -829,7 +862,7 @@ error <- data.frame(
   )
 
 #plot the error
-ggplot(error, aes(c(1: size))) + 
+ggplot(error, aes(c(1: dim(error)[1]))) + 
   geom_line(aes(y = ERROR), color = "red", alpha=.7) + 
   geom_line(aes(y = real), color = "blue", alpha=.7) + 
   geom_line(aes(y = pred), color = "green", alpha=.7) + 
@@ -842,8 +875,60 @@ train %>% group_by(AQI_cat) %>% count()
 df_norm %>% group_by(AQI_cat) %>% count()
 
 # Calculate and print accuracy
-error <- error %>% mutate(pred = as.integer(pred) + ifelse(pred - as.integer(pred)>.5, 1, 0)) %>% mutate(accuracy = ifelse(real == pred, 1, 0))
+error <- error %>% mutate(pred = as.integer(pred) + ifelse(pred - as.integer(pred)>.6, 1, 0)) %>% mutate(accuracy = ifelse(real == pred, 1, 0))
 
 print( paste("Accuracy: ", as.character(sum(error$accuracy)/dim(error)[1]*100), "%", sep = ""))
 print(paste("Total error: ", as.character( sum(error$ERROR)/dim(error)[1]*100), sep = ""))
+
+table(error$real, error$pred)
+
+error$real
 ```
+
+
+```{r}
+library(ranger)
+
+ #PRES + DEWP + RAIN + WSPM + wd.E + wd.ENE + wd.ESE + wd.N + wd.NE + wd.NNE + wd.NNW + wd.NW + wd.S + wd.SE + wd.SSE + wd.SSW + wd.SW + wd.W + wd.WNW + wd.WSW + season + AQI_cat_prev1
+
+
+
+forest <- ranger(AQI_cat~  PRES + DEWP + wd.E + wd.ENE + wd.ESE + wd.N + wd.NE + wd.NNE + wd.NNW + wd.NW + wd.S + wd.SE + wd.SSE + wd.SSW + wd.SW + wd.W + wd.WNW + wd.WSW + season + AQI_cat_prev1, 
+                 data=train,
+                 num.trees = 400,
+                 importance = 'impurity',
+                 min.node.size = 5,
+                 max.depth = 0,
+                 seed = 123,
+                 classification = TRUE)
+
+## Prediction
+pred.forest <- predict(forest, data = test)
+table(test$AQI_cat, pred.forest$predictions)
+
+# Calc the error
+error <- data.frame(
+  real = test$AQI_cat,
+  pred =  pred.forest$predictions
+  )
+
+error <- error %>% mutate(pred = as.integer(pred) + ifelse(pred - as.integer(pred)>.5, 1, 0)) %>% mutate(accuracy = ifelse(real == pred, 1, 0))
+
+print(table(error$real, error$pred))
+print( paste("Accuracy: ", as.character(sum(error$accuracy)/dim(error)[1]*100), "%", sep = ""))
+
+forest$variable.importance
+str(forest)
+```
+
+
+
+
+
+
+
+
+
+
+
+
