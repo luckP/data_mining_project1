@@ -1,0 +1,990 @@
+---
+title: "Projeto Data Mining I"
+author: "Lucas Parada, Ana Catarina Monteiro, Lucas de Paula"
+date: "23/12/2019"
+output: pdf_document
+header-includes:
+   # - \usepackage[brazilian]{babel} # idioma
+   # - \usepackage[utf8]{inputenc}  # acento
+   
+---
+
+_____________________________________________________________________________
+## **Introdução** 
+  O presente relatório passa pela previsão no nível de poluição do ar, AQI, na cidade de Pequim, província de Hebei, China, tendo como base um conjunto de dados que caracterizam a qualidade do ar na cidade. Os respetivos dados são recolhidos de 12 locais de monitorização do ambiente, em diferentes localidades, e posteriormente comparados com a estação meteorológica mais próxima, a Administração meteorológica da China. Os mesmos, são medidos desde o dia 1 de março de 2013 a 28 de fevereiro de 2017 e descrevem temporalmente alguns fatores climáticos (temperatura, pressão, *dew point*, precipitação,  direção e velocidade do vento), assim como a concentração de poluentes relevantes para este estudo.   
+  Numa primeira fase foi realizada a importação dos dados, assim como a sua limpeza e pré-processamento. Posto isto, procedeu-se à análise dos mesmos, visando encontrar relações entre as diferentes variáveis e de que modo poderiam influenciar a previsão pretendida. Por fim, foram aplicados modelos distintos de previsão que intentaram prever o índice de qualidade do ar segundo os valores dos fatores climáticos e os AQI's anteriormente analisados.  
+    
+  
+## **Definição do problema**
+O índice de qualidade do ar (AQI) versa o quão poluído o mesmo se encontra ou o quanto pode vir a estar e consequentemente de que modo influencia o risco de saúde, que tende a aumentar à medida que o AQI aumenta.  
+  De acordo com a Organização Mundial de Saúde (OMS), os níveis de poluição em Pequim ultrapassaram níveis considerados perigosos[1], colocando em risco a qualidade de vida da população, e ocasionando prejuízos no ambiente a longo prazo. Por conseguinte, desde janeiro de 2013[2], a China continental decidiu adotar o AQI para medir os seus níveis de poluição baseados na concentração de seis poluentes atmosféricos, nomeadamente partículas em suspensão menores que 10 micrometro de diâmetro aerodinâmico (PM10) e menores que 2.5 micrometro (PM2.5), dióxido de enxofre (SO2), dióxido de azoto (NO2), monóxido de carbono (CO) e ozono (O3). Este índice é calculado por dia e varia de acordo com seis categorias. Inicialmente é atribuída uma pontuação singular a cada poluente, e o valor final do AQI corresponde à mais alta entre as calculadas. 
+
+## **Pré-processamento dos dados**
+Inicialmente realizámos a importação dos dados para o formato que considerámos mais apropriado visando facilitar a sua limpeza, pré-processamento e posterior análise.
+
+### **Importação e análise dos dados**
+Numa primeira fase, escolhemos analisar o dataset relativo à estação de Aotizhongxin e elegemos o DataFrame do R para manipular os dados, uma vez que este formato facilita a manipulação de várias variáveis de classes diferentes e possui diversas ferramentas que auxiliam este processo. Posto isto, recorrendo à função 'summary'(Anexo 1), conseguimos observar algumas informações genéricas relativas aos nossos dados, nomeadamente dados estatísticos e a existência de *missing values*.   
+
+```{r someVar, echo=FALSE, message=FALSE, warning=FALSE}
+suppressMessages(library(na.tools))
+suppressMessages(library(naniar))
+suppressMessages(library(dplyr))
+suppressMessages(library(zoo))
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(tidyimpute))
+suppressMessages(library("ggplot2"))
+suppressMessages(library(BBmisc))
+suppressMessages(library(caret))
+suppressMessages(library(mltools))
+suppressMessages(library(dataPreparation))
+suppressMessages(library(ggExtra))
+suppressMessages(library(e1071))
+suppressMessages(library(performanceEstimation))
+
+#suppressMessages(library(neuralnet))
+require(neuralnet)
+require(tree)
+library(ranger)
+
+df <- read.csv('data/PRSA_Data_Aotizhongxin_20130301-20170228.csv')
+df  <- tbl_df(df )
+color_list <- c('#FF928B', '#FFAC81', '#FFC491', '#EFE8A2', '#CDEAC0')
+```
+
+  Considerando valores referentes a quatro anos completos, e tendo em conta que os valores são obtidos de hora em hora $((4*365+1)*24 = 35064$, valor este igual ao número de linhas totais), concluímos que não existia nenhuma hora ou dia onde faltassem todas as variáveis que constituem o nosso dataset, tendo em conta, ainda, a ausência de linhas duplicadas.
+
+### **Data-Cleaning**
+Passámos, portanto, ao tratamento de *missing values*, considerando primeiro a existência de *outliers*, uma vez que os mesmos poderiam influenciar o preenchimento dos valores referidos anteriormente. Sendo os *outliers* dados com características consideravelmente diferentes da maioria dos outros objetos, isto é, ruído que pode interferir na análise dos dados, decidimos identificá-los para proceder ao seu tratamento. Para esse efeito, observámos o comportamento das variáveis numéricas, recorrendo a gráficos como o boxplot, comparando três escalas temporais diferentes: todo o dataset, por estação do ano e por mês. Ao verificar a sua distribuição por todo o dataset percebemos que os valores aparentavam padrões correspondentes a quatro estações (figura 1), ainda assim, concluímos que ao visualizar os dados por mês a variação entre os mesmos não era tão significativa, identificando melhor os *outliers*.  
+
+```{r fig.height=3, fig.width=5 , fig.align="center", echo=FALSE, warning=FALSE}
+theme_set(theme_bw())  # pre-set the bw theme.
+ggplot(df, aes(c(1: dim(df)[1]), CO)) + geom_jitter(width = .5, size=.1) +
+  labs(
+    title="Figura 1",
+       subtitle="Variação do CO ao longo do dataset", 
+       x="Tempo",
+       y="CO")
+
+```
+
+  Depois de identificados estes casos, optámos por tratá-los de modos diferentes consoante o seu significado real. Isto é, no caso da variável precipitação (RAIN), os *outliers* observados tratavam-se de casos sensíveis, ou seja, depois de algum tempo na ausência de precipitação qualquer alteração aos valores da mesma foram entendidos como *outliers* e por esse motivo decidimos não alterar os valores desta variável. No que diz respeito aos restantes, alterámos a temperatura (TEMP) para kelvin[4] para trabalhar com valores positivos, e substituímo-la, assim como as restantes variáveis, por 'NA' (valores em falta) em caso de haver *outliers*. Foram experimentados dois métodos diferentes para o tratamento dos *outliers*: se estes fossem superiores a quatro vezes a média[3] para o respetivo ano e mês. ou o método que a técnica do boxplot aplica para a eliminação de outliers[5] $Q1-1.5*IQR<x< Q3+1.5*IQR$.  
+  No final destas operações, utilizámos um gráfico de 'geom_points' para analisar o comportamento das variáveis após o tratamento dos *outliers* e concluímos que o método do boxplot eliminava dados em demasia pelo que optamos por tratar esses valores recorrendo à primeira estratégia.  
+  Ulteriormente a estas operações, visando o tratamento de *missing values*, observámos graficamente de que modo as diferentes variáveis se relacionavam, e encontrámos explicitamente uma relação positiva entre a temperatura e o *dew point* e uma negativa entre a pressão atmosférica (PRES) e o *dew point*, tal como podemos observar nos gráficos do Anexo 2.
+  Para preencher os valores que ainda se encontravam em falta, no caso da chuva optámos por substituir pela mediana, quanto à variável categórica, escolhemos o valor correspondente à hora anterior e relativamente ás restantes elegemos a interpolação linear como a melhor escolha, uma vez que se tratam de valores temporais com alguma tendência, procurando deste modo aproximar os *missing values* o mais possível aos valores reais.
+
+
+```{r fig.height=3, fig.width=5 , fig.align="center", echo=FALSE, warning=FALSE}
+func_quart <- function(val){
+  print(val)
+  if(is.na(val) )
+    return(TRUE)
+  
+  qr1 <- as.numeric(summary(val)['1rd Qu.'])
+  qr3 <- as.numeric(summary(val)['3rd Qu.'])
+  
+  iqr <- 1.5 * (qr3 - qr1)
+  
+  if( val>iqr) 
+    return(TRUE) 
+  
+  if( val<-iqr)
+     return(TRUE)
+  
+  return( FALSE )
+}
+
+df_preproc <- df
+
+df_preproc <- df_preproc %>% mutate(TEMP =  TEMP+273.15)
+#df_preproc$TEMP_dif %>% sort() %>% rev() %>% round() %>% table()
+df_preproc <- df_preproc %>% group_by(year, month) %>% 
+  mutate(CO =    ifelse(CO >    4*mean(CO, na.rm = T),   NA,  CO)) %>% 
+  mutate(PM2.5 = ifelse(PM2.5 > 4*mean(PM2.5, na.rm = T),NA,  PM2.5)) %>% 
+  mutate(PM10 =  ifelse(PM10 >  4*mean(PM10, na.rm = T), NA,  PM10)) %>% 
+  mutate(SO2 =   ifelse(SO2 >   4*mean(SO2, na.rm = T),  NA,  SO2)) %>% 
+  mutate(NO2 =   ifelse(NO2 >   4*mean(NO2, na.rm = T),  NA,  NO2)) %>% 
+  mutate(O3 =    ifelse(O3 >    4*mean(O3, na.rm = T),   NA,  O3)) %>% 
+  mutate(TEMP =  ifelse(TEMP > 4*mean(TEMP, na.rm = T), NA,  TEMP)) %>% 
+  #mutate(TEMP =  ifelse(func_quart(TEMP) == TRUE, NA,  TEMP)) %>% 
+  mutate(PRES =  ifelse(PRES >  4*mean(PRES, na.rm = T), NA,  PRES)) %>% 
+  mutate(DEWP =  ifelse(abs(DEWP) >  4*abs(mean(DEWP, na.rm = T)), NA,  DEWP)) %>% 
+  #mutate(DEWP =  ifelse(DEWP > func_quart(DEWP),  NA,  DEWP)) %>% 
+  #mutate(RAIN =  ifelse(RAIN >  4*mean(RAIN, na.rm = T), NA,  RAIN)) %>% 
+  #mutate(WSPM =  ifelse(WSPM >  4*mean(WSPM, na.rm = T), NA,  WSPM))  %>%
+  ungroup()
+
+df_preproc <- df_preproc %>% mutate(RAIN_cat =  ifelse(RAIN > 0, 1,  0))
+df_preproc <- df_preproc %>% mutate(TEMP =  TEMP-273.15)
+```
+
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+df_preproc$PM2.5 <- na.approx(df_preproc$PM2.5, rule=2)
+df_preproc$PM10 <- na.approx(df_preproc$PM10, rule=2)
+df_preproc$SO2 <- na.approx(df_preproc$SO2, rule=2)
+df_preproc$NO2 <- na.approx(df_preproc$NO2, rule=2)
+df_preproc$CO <- na.approx(df_preproc$CO, rule=2)
+df_preproc$O3 <- na.approx(df_preproc$O3, rule=2)
+df_preproc$TEMP <- na.approx(df_preproc$TEMP, rule=2)
+df_preproc$PRES <- na.approx(df_preproc$PRES, rule=2)
+df_preproc$DEWP <- na.approx(df_preproc$DEWP, rule=2)
+df_preproc$WSPM <- na.approx(df_preproc$WSPM, rule=2)
+df_preproc <- df_preproc %>% mutate(RAIN_cat = ifelse(is.na(RAIN_cat), 0, RAIN_cat))
+
+#RAIN
+#df_preproc$RAIN[which(is.na(df_preproc$RAIN))] <- mode(df_preproc$RAIN)
+df_preproc <- df_preproc %>% mutate(RAIN = ifelse(is.na(RAIN), 0, RAIN))
+df_preproc <- transform(df_preproc, wd = na.locf(wd))
+
+#WSPM
+#Precisamo verificar como tratar desta variavel(relação entre temperatura e )
+
+#gg_miss_var(df_preproc)
+#df_preproc %>% any_na()
+```
+
+
+### **Data Pre-Processing**
+No que concerne ao pré-processamento dos dados, começámos por corrigir as unidades de medida de alguns poluentes[6] de acordo com o pedido para calcular o AQI[7], e, seguidamente, calculámos a média diária de todas as variáveis numéricas e a moda da categórica (direção do vento (WD)). Posto isto, visto que cada linha do dataset corresponde a uma hora de cada dia, removemos as coluna relativas à hora e ao número de linhas, e eliminámos as linhas duplicadas.  
+  Decidimos ainda calcular as estações do ano numérica e categoricamente, aplicámos one-hot-encoding à variável categórica direção do vento, visando facilitar a manipulação dos dados, e ainda criámos uma nova variável relativa à precipitação, transformando-a noutra, categórica, para mais tarde auxiliar a previsão pretendida.  
+  Procedemos então ao cálculo do AQI para cada variável[7], em seguida, para cada dia, conseguindo finalmente obter uma visão acerca do comportamento do índice de poluição calculado para todo o dataset.  
+
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+# Unidades de medida
+  #massa atomica de atomos utilizados
+  o <- 15.999
+  n <- 14.007
+  c <- 12.011
+  s <- 32.06
+
+  #calculando o volume a partir da pressao e da temperatura
+  volum_func <- function(t, p){
+    return(22.41 * ((t+273.15)/273.15) * 1013/p)
+  }
+
+  # conversão de ug/m^3 para ppb
+  df_preproc <- df_preproc %>% mutate( CO  = CO  * volum_func(TEMP, PRES) / (c+o) )
+  df_preproc <- df_preproc %>% mutate( SO2 = SO2 * volum_func(TEMP, PRES) / (s+o*2) )
+  df_preproc <- df_preproc %>% mutate( NO2 = NO2 * volum_func(TEMP, PRES) / (n+o*2) )
+  df_preproc <- df_preproc %>% mutate( O3  = O3  * volum_func(TEMP, PRES) / (o*3) )
+  
+  # conversão de ppb para ppm
+  df_preproc <- df_preproc %>% mutate( CO  = CO / 1000 )
+  
+```
+
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+# Calcular a media diaria das variaveis e removemos as linhas duplicadas
+
+calc_mode <- function(x){
+  uniq_x <- unique(x)
+  return(uniq_x[which.max(tabulate(match(x, uniq_x)))])
+}
+
+df_preproc_sample <- df_preproc %>% group_by(year, month, day) %>% 
+      mutate(CO =  mean(CO, na.rm = T)) %>% 
+      mutate(PM2.5 =  mean(PM2.5, na.rm = T)) %>% 
+      mutate(PM10 = mean(PM10, na.rm = T)) %>%
+      mutate(SO2 = mean(SO2, na.rm = T)) %>%
+      mutate(NO2 = mean(NO2, na.rm = T)) %>%
+      mutate(O3 = mean(O3, na.rm = T)) %>%
+      mutate(TEMP = mean(TEMP, na.rm = T)) %>%
+      mutate(PRES = mean(PRES, na.rm = T)) %>%
+      mutate(DEWP = mean(DEWP, na.rm = T)) %>%
+      mutate(RAIN = mean(RAIN, na.rm = T)) %>%
+      mutate(WSPM = mean(WSPM, na.rm = T)) %>%
+  
+      mutate(wd = calc_mode(wd)) %>%
+      mutate(RAIN_cat = max(RAIN_cat)) %>%
+      ungroup() %>%
+      select(-No)  %>% 
+      select(-hour) %>% 
+      unique()
+```
+
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+# One Hot Encode da variavel wd
+dmy  <- dummyVars(" ~wd", data = df_preproc_sample)
+trsf <- data.frame(predict(dmy, newdata = df_preproc_sample))
+
+df_preproc_sample <- cbind(df_preproc_sample, trsf)
+
+```
+
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+# Calcular AQI para cada variavel
+
+aqi_table <- read.csv("aqi_table.csv", header = T)
+  calc_aqi <- function(c, c_h, c_l){
+    ii = 1
+    i_h <- aqi_table$AQI_NUM_high
+    i_l <- aqi_table$AQI_NUM_low
+    
+    for(i in c(1:7)){
+      if(c_h[i]>=c)
+        ii = i
+        return(       ((i_h[i] - i_l[i])/(c_h[i] - c_l[i])) * (c - c_l[i]) + i_l[i]     )
+    }
+    #return( ((i_h[ii] - i_l[ii])/(c_h[ii] - c_l[ii])) * (c - c_l[ii]) + i_l[ii])
+  }
+
+  df_preproc_sample <- df_preproc_sample %>% mutate( CO_AQI    =  calc_aqi(CO,aqi_table$CO_high, aqi_table$CO_low) )
+  df_preproc_sample <- df_preproc_sample %>% mutate( PM2.5_AQI =  calc_aqi(PM2.5, aqi_table$PM2.5_high, aqi_table$PM2.5_low) )
+  df_preproc_sample <- df_preproc_sample %>% mutate( PM10_AQI  =  calc_aqi(PM10, aqi_table$PM10_high, aqi_table$PM10_low) )
+  df_preproc_sample <- df_preproc_sample %>% mutate( SO2_AQI   =  calc_aqi(SO2,aqi_table$SO2_high, aqi_table$SO2_low) )
+  df_preproc_sample <- df_preproc_sample %>% mutate( NO2_AQI   =  calc_aqi(NO2,aqi_table$NO2_high, aqi_table$NO2_low) )
+  df_preproc_sample <- df_preproc_sample %>% mutate( O3_AQI    =  calc_aqi(O3,aqi_table$O3_high, aqi_table$O3_low) )
+
+```
+
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+# Calc a class variable AQI
+df_preproc_sample[, "AQI"] <- apply( df_preproc_sample[c("PM10_AQI", "SO2_AQI", "NO2_AQI", "CO_AQI", "O3_AQI")], 1,max)
+
+df_preproc_sample <- df_preproc_sample %>% mutate(AQI_cat = 
+                                          ifelse(AQI <= 50, 0, 
+                                            ifelse(AQI <= 100, 1,
+                                              ifelse(AQI <= 150, 2, 
+                                                ifelse(AQI <= 200, 3, 
+                                                  ifelse(AQI <= 300, 4, 5 ))))))
+
+df_preproc_sample <- df_preproc_sample %>% mutate(AQI_cat_bin = ifelse(AQI <= 150, 0, 1))
+
+df_preproc_sample <- df_preproc_sample %>% mutate(AQI_poll = 
+                                  ifelse(CO_AQI  ==  AQI,  'CO', 
+                                    ifelse(SO2_AQI  == AQI, 'SO2',
+                                      ifelse(NO2_AQI == AQI, 'NO2', 
+                                          ifelse(PM10_AQI == AQI, 'PM10', 'O3' )))))
+
+df_preproc_sample %>% ggplot(aes(c(1:nrow( df_preproc_sample )), AQI)) + 
+  geom_point(size=1, aes(colour = cut(AQI, c(-Inf,50, 100, 150, 200, 300, Inf)))) +
+  #facet_wrap(~season ) + 
+  scale_color_manual(name = "AQI_cat"
+                     ,values = c("(-Inf,50]" = "#00e400",
+                                  "(50,100]" = "#ffeb3b",
+                                  "(100,150]" = "#ff7e00",
+                                  "(150,200]" = "#f00f00",
+                                  "(200,300]" = "#99004c",
+                                  "(300, Inf]" = "#7e0922")
+                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) +
+    labs(
+    title="Figura 2",
+       subtitle="Variação do AQI ao longo do dataset", 
+       x="Tempo",
+       y="AQI")
+
+```
+
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+# calcular a estação do ano
+# Selecionamos uma sequencia logica para a estação do ano, criando uma escala de de 0 a 3, sendo 0 a mais quente a 3 a mais fria
+
+df_preproc_sample <- df_preproc_sample %>% mutate(season = 
+  ifelse(month == 12 & day >= 21, 3, #inverno
+  ifelse(month == 1 | month == 2, 3, #inverno 
+  ifelse(month == 3 & day < 20, 3, #inverno
+         
+  ifelse(month == 3 & day >= 20, 1, #primavera
+  ifelse(month == 4 | month == 5, 1, #primavera 
+  ifelse(month == 6 & day < 21, 1,  #primavera
+         
+  ifelse(month == 6 & day >= 21, 0,  #verao
+  ifelse(month == 7 | month == 8, 0, #verao
+  ifelse(month == 9 & day < 21, 0, #verao
+         
+  ifelse(month == 9 & day >= 21, 2, #outono
+  ifelse(month == 10 | month == 11, 2, #outono
+  ifelse(month == 12 & day < 21, 2, #outono
+         -1)))))))))))))
+
+df_preproc_sample <- df_preproc_sample %>% mutate(season_id = 
+  ifelse(month == 12 & day >= 21, 'Winter', 
+  ifelse(month == 1 | month == 2, 'Winter', 
+  ifelse(month == 3 & day < 20, 'Winter', 
+         
+  ifelse(month == 3 & day >= 20, 'Spring', 
+  ifelse(month == 4 | month == 5, 'Spring', 
+  ifelse(month == 6 & day < 21, 'Spring', 
+         
+  ifelse(month == 6 & day >= 21, 'Summer', 
+  ifelse(month == 7 | month == 8, 'Summer', 
+  ifelse(month == 9 & day < 21, 'Summer', 
+         
+  ifelse(month == 9 & day >= 21, 'Autumn', 
+  ifelse(month == 10 | month == 11, 'Autumn', 
+  ifelse(month == 12 & day < 21, 'Autumn', 
+         0)))))))))))))
+
+```
+
+  Com base na análise realizada, futuramente apresentada, e tendo em conta os gráficos que estudámos, constatámos uma soberania do poluente PM2.5, o que tornava quase impossível aferir relações e conclusões com as restantes variáveis. Por este motivo, tornou-se imperativo para nós desconsiderar os valores do poluente nos nossos cálculos, ainda que tenhamos entendido o porquê da China considerar o mesmo como o maior e mais alarmante poluente na cidade. Posto isto, para efeitos do cálculo do índice de poluição, tomámos como referência a tabela que calcula o AQI nos Estados Unidos, adotando os seus intervalos e unidades de medida como modelo.[7]  
+
+## Análise dos dados
+Fizemos uma análise os dados, agora já limpos, e procurámos estabelecer relações que se mostrassem relevantes, tanto para extrair informações úteis, como para a previsão pretendida.  
+  Começámos por relacionar o AQI ao longo de diferentes frações de tempo, comparando graficamente os seus valores, numéricos e categóricos, e averiguando de que modo conseguiríamos lograr mais conclusões. Inicialmente analisámos o comportamento do AQI face a todo o dataset, através de um gráfico de barras, e concluímos que a grande maioria dos dias definia o seu índice de poluição como 'Moderate' e, 'Hazardous' verificou-se, comparativamente aos restantes, como o mais baixo.  
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+# Create data
+data <- data.frame(
+  name  =c("1: Good", "2: Moderate", "3: Unhealthy SG", "4:  Unhealthy", "5: Very Unhealthy", "6: Hazardous"),
+  value = df_preproc_sample %>% group_by(AQI_cat) %>% count()
+  )
+
+# Barplot
+ggplot(data, aes(x=name, y=value.n)) + 
+  geom_bar(stat = "identity", position = "stack", fill = c("#00e400", "#ffeb3b", "#ff7e00", "#f00f00", "#99004c", "#7e0922")) + 
+  theme(legend.position="none") +
+    labs(
+    title="Figura 3",
+       x="AQI categorico",
+       y="Valor")
+
+```
+  
+  Comparando, depois, o mesmo ao longo dos anos que o dataset inclui, demo-nos conta, (atendendo a um gráfico de 'geom_point'), que 2017 apresentava os valores mais baixos de poluição, mas uma vez que somente conhecemos valores referentes a dois meses desse ano, desconsiderámo-lo da nossa análise, desse modo, é percetível que desde 2014 os níveis de poluição diminuíram nos anos consecutivos. Correspondentemente, esta conclusão veio corroborar algumas pesquisas, que sugerem a adoção de políticas contra a poluição desde 2014, "quando no dia 4 de março o primeiro-ministro Li Keqiang anunciou uma mudança nos rumos do país: "Vamos declarar guerra à poluição assim como declaramos guerra à pobreza"."[8].   
+
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+df_preproc_sample %>% mutate(year = as.character(year)) %>% ggplot(aes( year, AQI ))+
+  #geom_point(size=5, alpha = .1)+
+geom_point(size=5, alpha = .3,aes(colour = cut(AQI_cat, c(-Inf, 1, 2, 3, 4, Inf)))) +
+  #facet_wrap(~season ) + 
+geom_boxplot(alpha = 0) +
+scale_color_manual(name = "AQI_cat"
+                   ,values = c("(-Inf,1]" = "#00e400",
+                                "(1,2]" = "#ffeb3b",
+                                "(2,3]" = "#ff7e00",
+                                "(3,4]" = "#f00f00",
+                                "(4, Inf]" = "#7e0023")
+                   ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) +
+    labs(
+    title="Figura 4",
+       subtitle="Variação do AQI por ano")
+
+```
+  
+  Continuamente, comparámos o AQI face ao mês e à estação do ano, os quais mostraram um aumento de poluição nos meses/estações mais frias e uma redução nos mais quentes, nomeadamente no mês de agosto, que não ultrapassou o índice de 150('Moderate').  
+  
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+#Aumento do AQI mes
+df_preproc_sample %>% mutate(month_str = 
+                        ifelse(month<10,paste("0", as.character(month)), as.character(month) ) ) %>% ggplot(aes( month_str, AQI )) + 
+  geom_point(size=5, alpha = .3,aes(colour = cut(AQI_cat, c(-Inf, 1, 2, 3, 4, Inf)))) +
+  
+  #facet_wrap(~season ) + 
+  geom_boxplot(alpha = 0) +
+  
+  scale_color_manual(name = "AQI_cat"
+                     ,values = c("(-Inf,1]" = "#00e400",
+                                  "(1,2]" = "#ffeb3b",
+                                  "(2,3]" = "#ff7e00",
+                                  "(3,4]" = "#f00f00",
+                                  "(4, Inf]" = "#7e0023")
+                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" ))+
+    labs(
+    title="Figura 5",
+       subtitle="Variação do AQI por mês",
+        x = "Month")
+```
+
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+#Aumento do AQI por estação do ano
+df_preproc_sample %>% 
+  mutate(season = as.character(season_id)) %>% 
+  ggplot(aes( season, AQI )) + 
+  geom_point(size=5, alpha = .3,aes(colour = cut(AQI_cat, c(-Inf, 1, 2, 3, 4, Inf)))) +
+  geom_boxplot(alpha = 0) +
+  scale_color_manual(name = "AQI_cat"
+                     ,values = c("(-Inf,1]" = "#00e400",
+                                  "(1,2]" = "#ffeb3b",
+                                  "(2,3]" = "#ff7e00",
+                                  "(3,4]" = "#f00f00",
+                                  "(4, Inf]" = "#7e0023")
+                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" ))+
+    labs(
+    title="Figura 6",
+       subtitle="Variação do AQI por estação")
+
+```
+  
+  De seguida, realizámos a análise comparativamente aos dias da semana, na expectativa de encontrar níveis mais altos ou mais baixos durante determinados dias. No entanto, observámos que as alterações do AQI não eram significativas, descartando por isso, a hipótese deste fator influenciar o modelo de previsão.  
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+week_day = 5
+
+df_preproc_sample <- df_preproc_sample %>% mutate(week = 0) 
+for(i in c(1: dim(df_preproc_sample)[1])){
+  df_preproc_sample$week[i] <- week_day
+  week_day <- week_day + 1
+  if(week_day>6){
+    week_day <-0
+  }
+}
+
+df_preproc_sample %>% mutate(week = as.character(week)) %>% ggplot(aes( week, AQI ))+
+  #geom_point(size=5, alpha = .1)+
+geom_point(size=5, alpha = .3,aes(colour = cut(AQI_cat, c(-Inf, 1, 2, 3, 4, Inf)))) +
+  #facet_wrap(~season ) + 
+geom_boxplot(alpha = 0) +
+scale_color_manual(name = "AQI_cat"
+                   ,values = c("(-Inf,1]" = "#00e400",
+                                "(1,2]" = "#ffeb3b",
+                                "(2,3]" = "#ff7e00",
+                                "(3,4]" = "#f00f00",
+                                "(4, Inf]" = "#7e0023")
+                   ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) +
+    labs(
+    title="Figura 7",
+       subtitle="Variação do AQI por dia da semana")
+```
+
+  Posto isto, procurámos saber, recorrendo ao gráfico 'pie chart', quais os poluentes que mais influenciavam o AQI, e, de acordo com o mesmo, verificámos que, dos cinco poluentes considerados, os que mais caracterizavam o índice de poluição, de modo crescente, eram: NO2, O3 e em maior quantidade, PM10. De modo consequente, observámos o comportamento deste último poluente, por hora, considerando a possibilidade da sua concentração ser superior em algum momento do dia, no entanto, o mesmo apresentou diferenças irrelevantes, entendendo que esta análise não influenciaria os modelos de previsão, uma vez que o AQI é calculado por dia.   
+```{r fig.height=3, fig.width=5 , fig.align="center", echo=FALSE}
+# Source: Categorical variable.
+# mpg$class
+
+pie <- ggplot(df_preproc_sample, aes(x = "", fill = factor(AQI_poll))) + 
+  geom_bar(width = 1) +
+  theme(axis.line = element_blank(), 
+        plot.title = element_text(hjust=0.5)) + 
+  labs(fill="class", 
+       x=NULL, 
+       y=NULL, 
+       title="Figura 8", 
+       caption="Source: mpg")
+  
+pie + coord_polar(theta = "y", start=0)
+```
+
+  Depois de realizada esta comparação, analisámos, de novo recorrendo a um gráfico 'geom_point' e a um 'histograma', a possível correlação entre os vários poluentes e o AQI, e demo-nos conta que existe uma clara relação linear entre o poluente PM2.5 tal como podemos observar na (figura 5) e o poluente PM10 (Anexo 7), enquanto que os restantes não mostraram uma relação tão forte(Anexo 8).
+
+```{r fig.height=3 , fig.align="left", echo=FALSE, warning=FALSE}
+
+g_pm2.5 <- ggplot(df_preproc_sample, aes(PM2.5_AQI, AQI)) +
+  geom_jitter() +
+  labs(
+       title="Figura 9",
+       subtitle="Relação entre PM2.5 e AQI",
+       x="PM2.5",
+       y="AQI")+
+  geom_smooth(method="lm" ) +
+  geom_count(alpha=.3, size=.05)
+ggMarginal(g_pm2.5, type = "histogram", fill="transparent")
+```
+
+
+  No que respeita aos fatores climáticos, realizámos ainda algumas comparações com o AQI que se mostraram muito relevantes. Comparado a fatores como a temperatura, precipitação, pressão e *dew point* percebemos que as mesmas dificilmente se relacionavam. Ainda assim, tentámos visualizar estes valores ao longo das quatro estações do ano, mas os resultados anteriores prevaleceram: a relação entre estas variáveis e o AQI era muito pobre, como demostradas na imagem a seguir e no Anexo 9.   
+
+```{r fig.height=4, fig.align="center", echo=FALSE, warning=FALSE}
+ggplot(df_preproc_sample, aes(TEMP, AQI)) + 
+  geom_jitter(alpha=.3, size=.5) +
+  facet_wrap(~season_id ) + 
+  labs(
+       title="Figura 10",
+       subtitle="Relação entre TEMP e AQI", 
+       x="TEMP",
+       y="AQI") + 
+  geom_smooth(method="lm" )
+
+```
+
+  Por outro lado, quando comparado com a velocidade do vento (WSPM) constatámos que o AQI tendia a diminuir à medida que a velocidade do vento aumentava, o que se justifica, uma vez que ventos fortes podem ajudar a limpar o ar em tempos muito curtos[9]. Seguidamente, tornou-se imperativo comparar o AQI com a velocidade do vento tendo em conta as diferentes direções do mesmo, e identificámos a predominância em algumas direções, conforme se comprova com a imagem 6. O que nos levou a crer que este fator climático era o que mais influenciaria o nosso modelo de previsão.  
+```{r fig.height=4, , fig.align="center", echo=FALSE, warning=FALSE}
+#Aumento do AQI por estação do ano
+df_preproc_sample %>% 
+  ggplot(aes( WSPM, AQI )) + 
+  geom_point(size=5, alpha = .3,aes(colour = cut(AQI_cat, c(-Inf, 1, 2, 3, 4, Inf)))) +
+  geom_boxplot(alpha = 0) +
+  scale_color_manual(name = "AQI_cat"
+                     ,values = c("(-Inf,1]" = "#00e400",
+                                  "(1,2]" = "#ffeb3b",
+                                  "(2,3]" = "#ff7e00",
+                                  "(3,4]" = "#f00f00",
+                                  "(4, Inf]" = "#7e0023")
+                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) +
+                      labs(
+                           title="Figura 11",
+                           subtitle="Relação entre WSPM e AQI") 
+
+ggplot(df_preproc_sample, aes(WSPM, AQI)) + 
+  geom_jitter(alpha=.3, size=.5) +
+  facet_wrap(~wd ) + 
+  labs(
+       title="Figura 12",
+       subtitle="Relação entre WSPM e AQI pela direção do vento", 
+       x="WSPM",
+       y="AQI") 
+```
+
+## **Modelos de previsão**
+Por fim concluídas as fases de limpeza e pré-processamento de dados, e levando em consideração os resultados das análises que efetuámos, podemos por fim refletir e decidir que modelos de previsão iríamos utilizar nesta etapa.  
+  Ambicionando prever valores o mais próximo possível dos reais, testámos, no total, quatro modelos preditivos, comparando mais tarde os seus resultados. Desses quatro, decidimos adotar dois modelos diferentes de regressão, e outros dois de classificação, os quais nos permitiram aferir algumas conclusões entre o mesmo tipo de previsão, e entre diferentes tipos, para prever a mesma variável, neste caso, o AQI.  
+  Ainda antes de aplicar qualquer um dos modelos referidos, procedemos à normalização dos dados, e arrendondámos depois as variáveis numéricas para duas casas decimais, tendo em vista a obtenção de melhores resultados. Posto isto, dividimos o dataset em treino (70%) e teste (30%), com set.seed(123) para que os dados estudados se mantivesses constantes.  
+
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+df_norm <- df_preproc_sample %>% select(c("TEMP","PRES","DEWP","RAIN","WSPM","wd.E","wd.ENE","wd.ESE","wd.N","wd.NE","wd.NNE","wd.NNW","wd.NW","wd.S","wd.SE","wd.SSE","wd.SSW","wd.SW","wd.W","wd.WNW","wd.WSW","CO_AQI","PM10_AQI","SO2_AQI","NO2_AQI","O3_AQI", "AQI","season", "RAIN_cat", "month", "AQI_cat_bin"))
+
+preproc <- preProcess(df_norm, method=c("range"))
+df_norm <- predict(preproc, df_norm)
+#df_norm <- df_norm %>% mutate(AQI_cat = as.factor(AQI_cat))
+
+df_norm <- df_norm*100
+df_norm <- df_norm %>% round()
+df_norm <- df_norm/100
+
+df_norm['AQI_cat'] <- df_preproc_sample$AQI_cat
+df_norm <- df_norm %>% mutate(AQI_cat_prev1 = NA)
+
+for(i in c(2: dim(df_norm)) ){
+  df_norm$AQI_cat_prev1[i] <- df_norm$AQI_cat_bin[i-1]
+}
+df_norm$AQI_cat_prev1[1] <- df_norm$AQI_cat_bin[1]
+#sapply(df_preproc, class)
+```
+
+
+  Ao executar os modelos de previsão testámos diferentes combinações de parâmetros, para que, desta forma, pudessemos minimizar o erro e aumentar a eficiência do modelo.  
+  Assim sendo, no que diz respeito aos modelos de regressão, escolhemos testar, em primeiro lugar, uma rede neuronal.  
+
+### Rede Neuronal
+  Para a criação do modelo foi utilizada a biblioteca 'neuralnet', e os parâmetros: direção do vento (fator atmosférico que mais influencia o índice de poluição, como verificado na análise dos dados), a precipitação, velocidade do vento, estação do ano e o AQI do dia anterior. Após efetuar a previsão pretendida, obtivemos os valores relativos à *mean squared error* e à *mean absolute error*, respetivamente, 0.012 e 0.083. No final, utilizando um gráfico de linhas, analisámos a variação entre os valores de AQI reais (azul), os valores previstos (verde) e o erro entre ambos (vermelho).  
+
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+
+## 70% of the sample size
+smp_size <- floor(0.7 * nrow(df_norm))
+
+## set the seed to make your partition reproducible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(df_norm)), size = smp_size)
+
+train <- df_norm[train_ind, ]
+test <- df_norm[-train_ind, ]
+
+nn <- neuralnet(AQI~ RAIN + WSPM + wd.E + wd.ENE + wd.ESE + wd.N + wd.NE + wd.NNE + wd.NNW + wd.NW + wd.S + wd.SE + wd.SSE + wd.SSW + wd.SW + wd.W + wd.WNW + wd.WSW + season + AQI_cat_prev1, 
+             data=train, hidden=6,act.fct = "logistic",
+                linear.output = FALSE)
+
+```
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+# plot(nn)
+```
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+predict=compute(nn,test)
+# Calc the error
+error <- data.frame(
+  absolut_error = (abs(test$AQI - predict$net.result)),
+  squared_error = ( (test$AQI - predict$net.result)**2 ),
+  real = test$AQI,
+  pred = predict$net.result
+  )
+
+print( paste("Mean Squared Error: ",  mean(error$squared_error) , sep = ""))
+print( paste("Mean absolut error: ", mean(error$absolut_error), sep = ""))
+
+```
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+#plot the error
+ggplot(error, aes(c(1: dim(error)[1]))) + 
+  geom_line(aes(y = absolut_error), color = "red", alpha=.7) + 
+  geom_line(aes(y = real), color = "blue", alpha=.7) + 
+  geom_line(aes(y = pred), color = "green", alpha=.7) + 
+  labs(
+       title="Figura 13",
+       subtitle = "Análise do erro",
+       x="TEMP",
+       y="AQI")
+```
+
+### Árvore de decisão
+  Ainda acerca de modelos regressivos, elegemos a 'decision tree' como segundo modelo. Para a mesma, recorremos à biblioteca 'tree' mas desta vez, quase todos os parâmetros se mostraram relevantes, influenciando de modo positivo o resultado final. Ao calcular os valores relativos à *mean squared error* e à *mean absolute error*, obtivemos 0.143, 0.091 na devida ordem. No final, assim como no modelo anterior, utilizámos um gráfico de linhas para analisar a variação entre os valores de AQI reais (azul), os valores previstos (verde) e o erro entre ambos (vermelho).  
+
+```{r fig.height=5, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+
+## set the seed to make your partition reproducible
+set.seed(123)
+smp_size <- floor(0.7 * nrow(df_norm))
+train_ind <- sample(seq_len(nrow(df_norm)), size = smp_size)
+
+train <- df_norm[train_ind, ]
+test  <- df_norm[-train_ind, ]
+
+tree_aqi <- tree(AQI~ TEMP + PRES + DEWP + RAIN + WSPM + wd.E + wd.ENE + wd.ESE + wd.N + wd.NE + wd.NNE + wd.NNW + wd.NW + wd.S + wd.SE + wd.SSE + wd.SSW + wd.SW + wd.W + wd.WNW + wd.WSW + season + AQI_cat_prev1,
+                data=train)
+```
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+plot(tree_aqi)
+text(tree_aqi, pretty = 0)
+```
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+# Calc the error
+error <- data.frame(
+  absolut_error = (abs(test$AQI - predict(tree_aqi, test))),
+  squared_error = ( (test$AQI - predict(tree_aqi, test))**2 ),
+  real = test$AQI,
+  pred = predict(tree_aqi, test)
+  )
+
+print( paste("Mean Squared Error: ",  mean(error$squared_error) , sep = ""))
+print( paste("Mean absolut error: ", mean(error$absolut_error), sep = ""))
+
+
+```
+```{r fig.height=3 , fig.align="center", echo=FALSE, warning=FALSE}
+#plot the error
+ggplot(error, aes(c(1: dim(error)[1]))) + 
+  geom_line(aes(y = absolut_error), color = "red", alpha=.7) + 
+  geom_line(aes(y = real), color = "blue", alpha=.7) + 
+  geom_line(aes(y = pred), color = "green", alpha=.7) + 
+  labs(
+       title="Figura 14",
+       x="TEMP",
+       y="AQI")
+```
+
+
+### Random Forest
+  Não obstante, os modelos de regressão não se mostraram excelentes a solucionar o problema inicialmente descrito, pelo que determinámos ser a altura de testar modelos de classificação, procurando resultados diferentes e capazes de perceber qual o melhor método a aplicar.  
+  Procedemos assim à criação de uma 'random forest', empregando a biblioteca 'ranger', e, depois de alguns testes, identificámos os parâmetros que, combinados, apresentam bons resultados. Os parâmetros selecionados foram: direção e velocidade do vento, o *dew point*, o AQI do dia anterior e a precipitação. Relativamente a este último parâmetro, notámos, na secção de análise de dados, que a sua relação com o AQI era muito fraca mas a sua ausência também causava alterações no resultado final. Por esse motivo, substituímos a variável precipitação por uma variável categórica (RAIN_cat) que se mostrou mais adequada ao modelo ao mostrar consideráveis melhorias na 'accuracy'. Calculámos depois a matriz de confusão, com base na classificação categórica do AQI, e ainda o valor da 'accuracy' que nos indica o quão próximos nos encontramos dos valores reais, à qual obtivemos uma aproximação de 48,29%.  
+
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+
+
+ #PRES + DEWP + RAIN + WSPM + wd.E + wd.ENE + wd.ESE + wd.N + wd.NE + wd.NNE + wd.NNW + wd.NW + wd.S + wd.SE + wd.SSE + wd.SSW + wd.SW + wd.W + wd.WNW + wd.WSW + season + AQI_cat_prev1
+
+set.seed(123)
+smp_size <- floor(0.7 * nrow(df_norm))
+train_ind <- sample(seq_len(nrow(df_norm)), size = smp_size)
+
+train <- df_norm[train_ind, ]
+test  <- df_norm[-train_ind, ]
+
+forest <- ranger(AQI_cat~ WSPM + DEWP + wd.E + wd.ENE + wd.ESE + wd.N + wd.NE + wd.NNE + wd.NNW + wd.NW + wd.S + wd.SE + wd.SSE + wd.SSW + wd.SW + wd.W + wd.WNW + wd.WSW + AQI_cat_prev1 + RAIN_cat, 
+                 data=train,
+                 num.trees = 400,
+                 importance = 'impurity',
+                 min.node.size = 5,
+                 max.depth = 0,
+                 seed = 123,
+                 classification = TRUE)
+## Prediction
+pred.forest <- predict(forest, data = test)
+print(table(test$AQI_cat, pred.forest$predictions))
+```
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+# Calc the error
+error <- data.frame(
+  real = test$AQI_cat,
+  pred =  pred.forest$predictions
+  )
+
+error <- error %>% mutate(pred = as.integer(pred) + ifelse(pred - as.integer(pred)>.5, 1, 0)) %>% mutate(accuracy = ifelse(real == pred, 1, 0))
+
+#print(table(error$real, error$pred))
+print( paste("Accuracy: ", as.character(sum(error$accuracy)/dim(error)[1]*100), "%", sep = ""))
+
+#forest$variable.importance
+#str(forest)
+```
+### SMV
+  Por fim, implementámos o modelo de SMV, utilizando a biblioteca 'e1071' e, pelos mesmos motivos da secção anterior, aplicámos os parâmetros escolhidos para a 'random forest'. Contudo, neste caso decidimos tratar a variável de classe de modo binário, agrupando desde 'Good' até 'Unhealthy for Sensitive Groups' (0-150) e as restantes (>150). No final deste modelo os valores de 'accuracy' correspondiam a 86,3%.  
+
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+df_norm_svm <- df_norm
+
+# Encoding the target feature as factor 
+df_norm_svm$AQI_cat_bin <- factor(df_norm_svm$AQI_cat_bin, levels = c(0, 1)) 
+
+set.seed(123)
+smp_size <- floor(0.7 * nrow(df_norm_svm))
+train_ind <- sample(seq_len(nrow(df_norm_svm)), size = smp_size)
+
+train <- df_norm_svm[train_ind, ]
+test  <- df_norm_svm[-train_ind, ]
+
+classifier = svm(AQI_cat_bin~  WSPM + DEWP + wd.E + wd.ENE + wd.ESE + wd.N + wd.NE + wd.NNE + wd.NNW + wd.NW + wd.S + wd.SE + wd.SSE + wd.SSW + wd.SW + wd.W + wd.WNW + wd.WSW + AQI_cat_prev1, data = train, 
+                 type = 'C-classification', 
+                 kernel = 'linear') 
+
+y_pred = predict(classifier, newdata = test) 
+c_matrix <- table(test$AQI_cat_bin, y_pred) 
+
+print(c_matrix)
+```
+```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
+#print(table(error$real, error$pred))
+print( paste("Accuracy: ", round((c_matrix[1]+c_matrix[4] )/sum(c_matrix)*10000)/100, '%', sep = ''))
+
+```
+
+## **Conclusão** 
+  De acordo com a pesquisa efetuada pudemos constatar que a China ainda é um país com elevados índices de poluição, facto este que pudemos observar na análise feita do local de monitorização. Apesar deste relatório residir apenas na interpretação dos valores obtidos por uma estação meteorológica específica conseguimos averiguar, em algumas das nossas pesquisas, que em média, o AQI tende a diminuir depois de 2014.  
+  Conforme sugerem as nossas análises, os fatores climáticos, tidos em conta neste dataset, apresentaram relações muito fracas com o AQI. Mesmo assim conseguimos desenvolver modelos de previsão capazes de nos fornecerem informações úteis. No entanto, devido ao problema mencionado anteriormente, entre a relação das variáveis meteorológicas e a variável de classe, constatámos que modelos de previsão que trabalham com previões mais simples, como tentar prever uma entre seis classes ou uma entre duas classes, tendem a ter resultados mais relevantes. No entanto para resultados mais apurados seriam necessários estudos mais aprofuntados como a utilização de outros datasets, encontrar relações entre diferentes datasets, outros tipos de poluentes como o PM01, CO2 ou o CH4 ou mesmo a análise de outros fatores meteorológicos como a humidade relativa do ar.  
+
+###### **Referências Bibliográficas**
+[1] https://www.bbc.com/portuguese/noticias/2013/01/130114_poluicao_china_mm  
+  [2] https://en.wikipedia.org/wiki/Air_quality_index  
+  [3] https://www.r-bloggers.com/outlier-detection-and-treatment-with-r/  
+  [4] https://www.metric-conversions.org/pt/temperatura/celsius-em-kelvin.htm  
+  [5] https://www.dcc.fc.up.pt/~rpribeiro/aulas/DMI1920/material/DMI_3-DataExpl_1920.pdf  
+  [6] http://www.apis.ac.uk/unit-conversion?fbclid=IwAR1ffhFbcOA9-tPqzGMTcueGweOeNhYauUL1qDYn2C8twtdP83Gm-6DFC9M  
+  [7] https://en.wikipedia.org/wiki/Air_quality_index  
+  [8] https://revistagalileu.globo.com/Ciencia/noticia/2018/03/guerra-contra-poluicao-comeca-dar-frutos-na-china.html  
+  [9] http://aqicn.org/faq/2015-11-05/a-visual-study-of-wind-impact-on-pm25-concentration  
+  
+
+## **Anexos**
+
+### Anexo 1
+```{r echo=FALSE, warning=FALSE}
+summary(df)
+```
+
+### Anexo 2
+```{r fig.height=3, fig.width=5 , fig.align="center", echo=FALSE, warning=FALSE}
+
+#check missing values
+#df %>% select(RAIN, TEMP, PRES, wd, WSPM) %>% filter_any_na()
+#gg_miss_var(df_preproc)
+
+atm = c("TEMP", "PRES", "DEWP", "RAIN")
+# TEMP
+theme_set(theme_bw())  # pre-set the bw theme.
+ggplot(df_preproc, aes(TEMP, DEWP)) + geom_jitter(width = .5, size=.1) +
+  labs(
+    title="TEMP",
+       subtitle="Relação entre TEMP e DEWP", 
+       x="DEWP",
+       y="TEMP")+ 
+  geom_smooth(method="lm", se=F)
+
+# PRES
+ggplot(df_preproc, aes(PRES, DEWP)) + geom_jitter(width = .5, size=.1) +
+  labs(
+      title="PRES",
+       subtitle="Relação entre PRES e DEWP", 
+       x="PRES",
+       y="DEWP")+ 
+  geom_count() + 
+  geom_smooth(method="lm", se=F)
+
+# DEWP
+ggplot(df_preproc, aes(WSPM, DEWP)) + geom_jitter(width = .5, size=.1) +
+  labs(
+       title="Jittered Points",
+       subtitle="Relação entre WSPM e DEWP", 
+       x="WSPM",
+       y="DEWP")+ 
+  geom_count() + 
+  geom_smooth(method="lm", se=F)
+
+# RAIN
+ggplot(df_preproc, aes(RAIN, DEWP)) + geom_jitter(width = .5, size=.1) +
+  labs(
+       title="RAIN",
+      subtitle="Relação entre RAIN e DEWP", 
+       x="RAIN",
+       y="DEWP")+ 
+  geom_count() + 
+  geom_smooth(method="lm", se=F)
+
+```
+
+### Anexo 3
+```{r}
+col_list = c("CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+
+#boxplot all dataset
+df_ALL_boxplot <- df %>% select(col_list)
+# remove rows with missing values
+df_ALL_boxplot <- df_ALL_boxplot[ complete.cases(df_ALL_boxplot), ]
+preproc<-preProcess(df_ALL_boxplot, method=c("range"))
+df_ALL_boxplot <- predict(preproc, df_ALL_boxplot)
+boxplot(x = df_ALL_boxplot, col = color_list, cex.axis=0.7)
+```
+
+### Anexo 4
+```{r fig.align="center", echo=FALSE}
+  #seasons
+  col_list <- c("season","CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+
+df_seasons_boxplot <- df %>% mutate(season = 
+  ifelse(month == 12 & day >= 21, 'Winter', 
+  ifelse(month == 1 | month == 2, 'Winter', 
+  ifelse(month == 3 & day < 20, 'Winter', 
+         
+  ifelse(month == 3 & day >= 20, 'Spring', 
+  ifelse(month == 4 | month == 5, 'Spring', 
+  ifelse(month == 6 & day < 21, 'Spring', 
+         
+  ifelse(month == 6 & day >= 21, 'Summer', 
+  ifelse(month == 7 | month == 8, 'Summer', 
+  ifelse(month == 9 & day < 21, 'Summer', 
+         
+  ifelse(month == 9 & day >= 21, 'Autumn', 
+  ifelse(month == 10 | month == 11, 'Autumn', 
+  ifelse(month == 12 & day < 21, 'Autumn', 
+         0))))))))))))
+) %>% select(col_list)
+
+#df_seasons_boxplot %>% group_by(season) %>% boxplot(col = color_list, cex.axis=0.7)
+
+for(s in df_seasons_boxplot$season %>% unique()){
+  
+  df_aux <- df_seasons_boxplot %>% filter(season == s) %>% select(-season)
+  
+  preproc<-preProcess(df_aux, method=c("range"))
+  norm2 <- predict(preproc, df_aux)
+  
+  norm2 %>% boxplot(main=s, col = color_list, cex.axis=0.7)
+  print('\n')
+}
+```
+
+### Anexo 5
+```{r fig.align="center", echo=FALSE}
+col_list = c("month", "CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+df_month_boxplot <- df %>% select(col_list)
+
+month_names <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+
+for(m in df_month_boxplot$month %>% unique() %>% sort()){
+  df_aux <- df_month_boxplot %>% filter(month == m) %>% select(-month)
+  
+  preproc<-preProcess(df_aux, method=c("range"))
+  norm2 <- predict(preproc, df_aux)
+  
+  par(cxy = c(.5,.5))
+  
+  norm2 %>% boxplot(main=month_names[m],col = color_list, cex.axis=0.7)
+  print('\n')
+}
+```
+
+### Anexo 6
+```{r fig.height=3 , fig.align="center", echo=FALSE, warning=FALSE}
+print("Anexo 2 ANALISE POR HORA PM10")
+df_preproc %>% 
+    mutate(hour_str = ifelse(hour<10,paste("0", as.character(hour)), as.character(hour) ) ) %>% 
+      ggplot(aes( hour_str, PM10 )) +
+      geom_point(size=5, alpha = .01, color = c('#74b9ff')) +
+      geom_boxplot(alpha = 0)
+
+```
+
+### Anexo 7
+```{r fig.height=3, fig.align="right", echo=FALSE}
+
+g_pm_10 <- ggplot(df_preproc_sample, aes(PM10_AQI, AQI)) + 
+  geom_jitter() +
+  labs(
+       title="PM10",
+       subtitle="Relação entre PM10 e AQI", 
+       x="PM10",
+       y="AQI") + 
+  geom_smooth(method="lm" ) + 
+  geom_count(alpha=.3, size=.5)
+ggMarginal(g_pm_10, type = "histogram", fill="transparent")
+```
+
+### Anexo 8
+```{r fig.height=3 , fig.align="center", echo=FALSE, warning=FALSE}
+# Relação AQI e PM10
+print("Anexo 3 RELAÇÃO AQI E POLUENTES")
+g_co <- ggplot(df_preproc_sample, aes(CO_AQI, AQI)) + 
+  geom_jitter() +
+  labs(
+       title="CO",
+       subtitle="Relação entre CO e AQI", 
+       x="CO",
+       y="AQI")+ 
+  geom_smooth(method="lm" ) + 
+  geom_count(alpha=.3, size=.05)
+ggMarginal(g_co, type = "histogram", fill="transparent")
+
+```
+
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+
+g_so2 <- ggplot(df_preproc_sample, aes(SO2_AQI, AQI)) + 
+  geom_jitter() +
+  labs(
+       title="SO2",
+       subtitle="Relação entre SO2 e AQI", 
+       x="SO2",
+       y="AQI")+ 
+  geom_smooth(method="lm" ) + 
+  geom_count(alpha=.3, size=.5)
+ggMarginal(g_so2, type = "histogram", fill="transparent")
+
+```
+
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+
+g_no2 <- ggplot(df_preproc_sample, aes(NO2_AQI, AQI)) + 
+  geom_jitter() +
+  labs(
+       title="NO2",
+       subtitle="Relação entre NO2 e AQI", 
+       x="NO2",
+       y="AQI")+ 
+  geom_smooth(method="lm" ) + 
+  geom_count(alpha=.3, size=.05)
+ggMarginal(g_no2, type = "histogram", fill="transparent")
+
+```
+
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+
+g_o3 <- ggplot(df_preproc_sample, aes(O3_AQI, AQI)) + 
+  geom_jitter() +
+  labs(
+       title="O3",
+       subtitle="Relação entre O3 e AQI", 
+       x="O3",
+       y="AQI")+ 
+  geom_smooth(method="lm" ) + 
+  geom_count(alpha=.3, size=.05)
+ggMarginal(g_o3, type = "histogram", fill="transparent")
+
+```
+
+### Anexo 9
+```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
+ggplot(df_preproc_sample, aes(PRES, AQI)) + 
+  geom_jitter(alpha=.3, size=.5) +
+  facet_wrap(~season_id ) + 
+  labs(
+       title="PRES",
+       subtitle="Relação entre PRES e AQI", 
+       x="PRES",
+       y="AQI") + 
+  geom_smooth(method="lm" )
+
+ggplot(df_preproc_sample, aes(DEWP, AQI)) + 
+  geom_jitter(alpha=.3, size=.5) +
+  facet_wrap(~season_id ) + 
+  labs(
+       title="DEWP",
+       subtitle="Relação entre DEWP e AQI", 
+       x="WSPM",
+       y="AQI") + 
+  geom_smooth(method="lm" )
+
+ggplot(df_preproc_sample, aes(RAIN, AQI)) + 
+  geom_jitter(alpha=.3, size=.5) +
+  facet_wrap(~season_id ) + 
+  labs(
+       title="DEWP",
+       subtitle="Relação entre DEWP e AQI", 
+       x="WSPM",
+       y="AQI") + 
+  geom_smooth(method="lm" )
+```
+
+
+
+
+
+
+
+
+
+
