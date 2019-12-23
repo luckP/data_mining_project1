@@ -24,7 +24,7 @@ Inicialmente realizámos a importação dos dados para o formato que considerám
 ##### **Importação e análise dos dados**
 Numa primeira fase, escolhemos analisar o dataset relativo à estação de Aotizhongxin e elegemos o DataFrame do R para manipular os dados uma vez que este formato facilita a manipulação de várias variáveis de classes diferentes e possui diversas ferramentas que auxiliam este processo. Posto isto, recorrendo à função 'summary'[Anexo 1.1], conseguimos observar algumas informações genéricas relativas aos nossos dados, nomeadamente dados estatísticos e a existência de *missing values*.   
 
-```{r someVar, echo=FALSE, message=FALSE}
+```{r someVar, echo=FALSE, message=FALSE, warning=FALSE}
 suppressMessages(library(na.tools))
 suppressMessages(library(naniar))
 suppressMessages(library(dplyr))
@@ -38,6 +38,13 @@ suppressMessages(library(caret))
 suppressMessages(library(mltools))
 suppressMessages(library(dataPreparation))
 suppressMessages(library(ggExtra))
+suppressMessages(library( e1071 ))
+suppressMessages(library(performanceEstimation))
+
+#suppressMessages(library(neuralnet))
+require(neuralnet)
+require(tree)
+library(ranger)
 
 df <- read.csv('data/PRSA_Data_Aotizhongxin_20130301-20170228.csv')
 df  <- tbl_df(df )
@@ -267,7 +274,12 @@ df_preproc_sample %>% ggplot(aes(c(1:nrow( df_preproc_sample )), AQI)) +
                                   "(150,200]" = "#f00f00",
                                   "(200,300]" = "#99004c",
                                   "(300, Inf]" = "#7e0922")
-                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) 
+                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) +
+    labs(
+    title="Figura 2",
+       subtitle="Variação do AQI ao longo do dataset", 
+       x="Tempo",
+       y="AQI")
 
 ```
 
@@ -329,7 +341,10 @@ data <- data.frame(
 ggplot(data, aes(x=name, y=value.n)) + 
   geom_bar(stat = "identity", position = "stack", fill = c("#00e400", "#ffeb3b", "#ff7e00", "#f00f00", "#99004c", "#7e0922")) + 
   theme(legend.position="none") +
-  labs(x = "New x label", y = "", title = "aasdfasdf", subtitle = "1234")
+    labs(
+    title="Figura 3",
+       x="AQI categorico",
+       y="Valor")
 
 ```
   
@@ -348,7 +363,10 @@ scale_color_manual(name = "AQI_cat"
                                 "(2,3]" = "#ff7e00",
                                 "(3,4]" = "#f00f00",
                                 "(4, Inf]" = "#7e0023")
-                   ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) 
+                   ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) +
+    labs(
+    title="Figura 4",
+       subtitle="Variação do AQI por ano")
 
 ```
   
@@ -369,7 +387,10 @@ df_preproc_sample %>% mutate(month_str =
                                   "(2,3]" = "#ff7e00",
                                   "(3,4]" = "#f00f00",
                                   "(4, Inf]" = "#7e0023")
-                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) 
+                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" ))+
+    labs(
+    title="Figura 5",
+       subtitle="Variação do AQI por mês")
 ```
 
 ```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
@@ -385,7 +406,10 @@ df_preproc_sample %>%
                                   "(2,3]" = "#ff7e00",
                                   "(3,4]" = "#f00f00",
                                   "(4, Inf]" = "#7e0023")
-                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) 
+                     ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" ))+
+    labs(
+    title="Figura 6",
+       subtitle="Variação do AQI por estação")
 
 ```
   
@@ -413,7 +437,10 @@ scale_color_manual(name = "AQI_cat"
                                 "(2,3]" = "#ff7e00",
                                 "(3,4]" = "#f00f00",
                                 "(4, Inf]" = "#7e0023")
-                   ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) 
+                   ,labels = c("Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy", "Very Unhealthy", "Hazardous" )) +
+    labs(
+    title="Figura 7",
+       subtitle="Variação do AQI por dia da semana")
 ```
 
 Posto isto, procurámos saber, recorrendo ao gráfico 'pie chart' quais os poluentes que mais influenciavam o AQI, e, de acordo com o mesmo, verificámos que, dos cinco poluentes considerados, os que mais caracterizavam o índice de poluição, de modo crescente, eram: NO2, O3 e em maior quantidade, PM10. De modo consequente, observámos o comportamento deste último poluente, por hora, considerando a possibilidade da sua concentração ser superior em algum momento do dia, no entanto, o mesmo apresentou diferenças irrelevantes, entendendo que esta análise não influenciaria os modelos de previsão, uma vez que o AQI é calculado por dia [Anexo xxxxx]. 
@@ -538,8 +565,6 @@ Assim sendo, no que diz respeito aos modelos de regressão, escolhemos testar, e
 Para a criação do modelo foi utilizada a biblioteca 'neuralnet', e os parâmetros: direção do vento (fator atmosférico que mais influencia o índice de poluição, como verificado na análise dos dados), a precipitação, velocidade do vento, estação do ano e o AQI do dia anterior. Após efetuar a previsão pretendida, obtivemos os valores relativos à *mean squared error* e à *mean absolute error*, respetivamente, 0.012 e 0.083. No final, utilizando um gráfico de linhas, analisamos a variação entre os valores de AQI reais (azul), os valores previstos (verde) e o erro entre ambos (vermelho).
 
 ```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
-#suppressMessages(library(neuralnet))
-require(neuralnet)
 
 ## 70% of the sample size
 smp_size <- floor(0.7 * nrow(df_norm))
@@ -589,7 +614,7 @@ ggplot(error, aes(c(1: dim(error)[1]))) +
 Ainda acerca de modelos regressivos, elegemos a 'decision tree' como segundo modelo. Para a mesma, recorremos à biblioteca 'tree' mas desta vez, quase todos os parâmetros se mostraram relevantes, influenciando de modo positivo o resultado final. Ao calcular os valores relativos à *mean squared error* e à *mean absolute error*, obtivemos 0.143, 0.091 na devida ordem. No final, assim como no modelo anterior, utilizando um gráfico de linhas para analisar a variação entre os valores de AQI reais (azul), os valores previstos (verde) e o erro entre ambos (vermelho).
 
 ```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
-require(tree)
+
 ## set the seed to make your partition reproducible
 set.seed(123)
 smp_size <- floor(0.7 * nrow(df_norm))
@@ -637,7 +662,7 @@ Não obstante, os modelos de regressão não se mostraram excelentes a soluciona
 Procedemos assim à criação de uma 'random forest', empregando a biblioteca 'ranger', e, depois de alguns testes, identificámos os parâmetros que, combinados, apresentam bons resultados. Os parametros selecionados foram: direção e velocidade do vento, o *dew point*, o AQI do dia anterior e a precipitação. Relativamente a este último parâmetro, notámos, na secção de análise de dados, que a sua relação com o AQI era muito fraca mas a sua ausência também causava alterações no resultado final. Por esse motivo, substituímos a variável precipitação por uma variável categórica (RAIN_cat) que se mostrou mais adequada ao modelo ao mostrar consideráveis melhorias na 'accuracy'. Calculámos depois a matriz de confusão, com base na classificação categórica do AQI, e ainda o valor da 'accuracy' que nos indica o quão próximos nos encontramos dos valores reais, à qual obtivemos uma aproximação de 48,29%. 
 
 ```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
-library(ranger)
+
 
  #PRES + DEWP + RAIN + WSPM + wd.E + wd.ENE + wd.ESE + wd.N + wd.NE + wd.NNE + wd.NNW + wd.NW + wd.S + wd.SE + wd.SSE + wd.SSW + wd.SW + wd.W + wd.WNW + wd.WSW + season + AQI_cat_prev1
 
@@ -679,9 +704,6 @@ print( paste("Accuracy: ", as.character(sum(error$accuracy)/dim(error)[1]*100), 
 Por fim, implementámos o modelo de SMV, utilizando a biblioteca 'e1071' e, pelos mesmos motivos da secção anterior, aplicámos os parâmetros escolhidos para a 'random forest'. Contudo, neste caso decidimos tratar a variável de classe de modo binário, agrupando desde 'Good' até 'Unhealthy for Sensitive Groups' (0-150) e as restantes (>150). No final deste modelo os valores de 'accuracy' correspondiam a 86,3%.
 
 ```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE, warning=FALSE}
-library( e1071 )
-library(performanceEstimation)
-
 df_norm_svm <- df_norm
 
 # Encoding the target feature as factor 
@@ -727,6 +749,82 @@ Conforme sugerem as nossas análises, os fatores climáticos, tidos em conta nes
 
 ###### **Anexos**
 
+```{r}
+col_list = c("CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+
+#boxplot all dataset
+df_ALL_boxplot <- df %>% select(col_list)
+# remove rows with missing values
+df_ALL_boxplot <- df_ALL_boxplot[ complete.cases(df_ALL_boxplot), ]
+preproc<-preProcess(df_ALL_boxplot, method=c("range"))
+df_ALL_boxplot <- predict(preproc, df_ALL_boxplot)
+boxplot(x = df_ALL_boxplot, col = color_list, cex.axis=0.7)
+```
+
+
+```{r fig.align="center", echo=FALSE}
+  #seasons
+  col_list <- c("season","CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+
+df_seasons_boxplot <- df %>% mutate(season = 
+  ifelse(month == 12 & day >= 21, 'Winter', 
+  ifelse(month == 1 | month == 2, 'Winter', 
+  ifelse(month == 3 & day < 20, 'Winter', 
+         
+  ifelse(month == 3 & day >= 20, 'Spring', 
+  ifelse(month == 4 | month == 5, 'Spring', 
+  ifelse(month == 6 & day < 21, 'Spring', 
+         
+  ifelse(month == 6 & day >= 21, 'Summer', 
+  ifelse(month == 7 | month == 8, 'Summer', 
+  ifelse(month == 9 & day < 21, 'Summer', 
+         
+  ifelse(month == 9 & day >= 21, 'Autumn', 
+  ifelse(month == 10 | month == 11, 'Autumn', 
+  ifelse(month == 12 & day < 21, 'Autumn', 
+         0))))))))))))
+) %>% select(col_list)
+
+#df_seasons_boxplot %>% group_by(season) %>% boxplot(col = color_list, cex.axis=0.7)
+
+for(s in df_seasons_boxplot$season %>% unique()){
+  
+  df_aux <- df_seasons_boxplot %>% filter(season == s) %>% select(-season)
+  
+  preproc<-preProcess(df_aux, method=c("range"))
+  norm2 <- predict(preproc, df_aux)
+  
+  norm2 %>% boxplot(main=s, col = color_list, cex.axis=0.7)
+  print('\n')
+}
+```
+
+### Por mês
+```{r fig.align="center", echo=FALSE}
+col_list = c("month", "CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
+df_month_boxplot <- df %>% select(col_list)
+
+month_names <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+
+for(m in df_month_boxplot$month %>% unique() %>% sort()){
+  df_aux <- df_month_boxplot %>% filter(month == m) %>% select(-month)
+  
+  preproc<-preProcess(df_aux, method=c("range"))
+  norm2 <- predict(preproc, df_aux)
+  
+  par(cxy = c(.5,.5))
+  
+  norm2 %>% boxplot(main=month_names[m],col = color_list, cex.axis=0.7)
+  print('\n')
+}
+```
+
+
+
+
+
+
+
 ```{r echo=FALSE, warning=FALSE}
 print("Anexo 1")
 summary(df)
@@ -756,7 +854,6 @@ ggplot(df, aes(PRES, DEWP)) + geom_jitter(width = .5, size=.1) +
   geom_smooth(method="lm", se=F)
 ```
 
-
 ```{r fig.height=3 , fig.align="center", echo=FALSE, warning=FALSE}
 print("Anexo 2 ANALISE POR HORA PM10")
 df_preproc %>% 
@@ -782,6 +879,7 @@ g_co <- ggplot(df_preproc_sample, aes(CO_AQI, AQI)) +
 ggMarginal(g_co, type = "histogram", fill="transparent")
 
 ```
+
 ```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
 
 g_so2 <- ggplot(df_preproc_sample, aes(SO2_AQI, AQI)) + 
@@ -796,6 +894,7 @@ g_so2 <- ggplot(df_preproc_sample, aes(SO2_AQI, AQI)) +
 ggMarginal(g_so2, type = "histogram", fill="transparent")
 
 ```
+
 ```{r fig.height=3, fig.align="center", echo=FALSE, warning=FALSE}
 
 g_no2 <- ggplot(df_preproc_sample, aes(NO2_AQI, AQI)) + 
@@ -857,50 +956,6 @@ ggplot(df_preproc_sample, aes(RAIN, AQI)) +
   geom_smooth(method="lm" )
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-### Por estação do ano
-```{r echo=FALSE}
-
-
-```
-
-### Por mês
-```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE}
-col_list = c("month", "CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
-df_month_boxplot <- df %>% select(col_list)
-
-month_names <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
-
-for(m in df_month_boxplot$month %>% unique() %>% sort()){
-  df_aux <- df_month_boxplot %>% filter(month == m) %>% select(-month)
-  
-  preproc<-preProcess(df_aux, method=c("range"))
-  norm2 <- predict(preproc, df_aux)
-  
-  par(cxy = c(.5,.5))
-  
-  norm2 %>% boxplot(main=month_names[m],col = color_list, cex.axis=0.7)
-  print('')
-}
-```
-
-
-
 ```{r fig.height=3, fig.width=5 , fig.align="center", echo=FALSE, warning=FALSE}
 
 #check missing values
@@ -956,113 +1011,6 @@ ggplot(df_preproc, aes(RAIN, DEWP)) + geom_jitter(width = .5, size=.1) +
 ```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```{r fig.height=3, fig.width=4 , fig.align="center", echo=FALSE}
-
-
-
-
-part1 <- function(){
-  
-  col_list = c("CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
-
-  #boxplot all dataset
-  df_ALL_boxplot <- df %>% select(col_list)
-  # remove rows with missing values
-  df_ALL_boxplot <- df_ALL_boxplot[ complete.cases(df_ALL_boxplot), ]
-  preproc<-preProcess(df_ALL_boxplot, method=c("range"))
-  df_ALL_boxplot <- predict(preproc, df_ALL_boxplot)
-  boxplot(x = df_ALL_boxplot, col = color_list, cex.axis=0.7)
-  
-  #seasons
-  col_list <- c("season","CO", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM")
-
-df_seasons_boxplot <- df %>% mutate(season = 
-  ifelse(month == 12 & day >= 21, 'Winter', 
-  ifelse(month == 1 | month == 2, 'Winter', 
-  ifelse(month == 3 & day < 20, 'Winter', 
-         
-  ifelse(month == 3 & day >= 20, 'Spring', 
-  ifelse(month == 4 | month == 5, 'Spring', 
-  ifelse(month == 6 & day < 21, 'Spring', 
-         
-  ifelse(month == 6 & day >= 21, 'Summer', 
-  ifelse(month == 7 | month == 8, 'Summer', 
-  ifelse(month == 9 & day < 21, 'Summer', 
-         
-  ifelse(month == 9 & day >= 21, 'Autumn', 
-  ifelse(month == 10 | month == 11, 'Autumn', 
-  ifelse(month == 12 & day < 21, 'Autumn', 
-         0))))))))))))
-) %>% select(col_list)
-
-#df_seasons_boxplot %>% group_by(season) %>% boxplot(col = color_list, cex.axis=0.7)
-
-for(s in df_seasons_boxplot$season %>% unique()){
-  
-  df_aux <- df_seasons_boxplot %>% filter(season == s) %>% select(-season)
-  
-  preproc<-preProcess(df_aux, method=c("range"))
-  norm2 <- predict(preproc, df_aux)
-  
-  norm2 %>% boxplot(main=s, col = color_list, cex.axis=0.7)
-  print('')
-}
-  
-  
-}
-
-part1()
-
-part2 <- function(){
-  
-}
-
-parte3 <-function(){
-  
-}
-
-
-
-
-
-
-```
 
 
 
